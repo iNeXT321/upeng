@@ -46,7 +46,7 @@ export const connectSSE = (url, params, onMessage, onError) => {
 
 // AI超级智能体聊天
 export const chatWithManus = (message) => {
-  return connectSSE('/ai/manus/chat', { message })
+  return connectSSE('/ai/autoAgent', { message })
 }
 
 export default {

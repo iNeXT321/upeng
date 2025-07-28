@@ -4,11 +4,15 @@ package com.yt.agent.agent;
 //import com.jd.genie.agent.printer.Printer;
 //import com.jd.genie.agent.tool.ToolCollection;
 //import lombok.AllArgsConstructor;
+import com.yt.agent.printer.Printer;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.tool.ToolCallback;
 
 import java.util.List;
 
@@ -22,7 +26,7 @@ public class AgentContext {
     String sessionId;
     String query;
     String task;
-//    Printer printer;
+    Printer printer;
 //    ToolCollection toolCollection;
     String dateInfo;
  //   List<File> productFiles;
@@ -32,4 +36,7 @@ public class AgentContext {
     String basePrompt;
     Integer agentType;
 //    List<File> taskProductFiles;
+
+    ToolCallback[] availableTools;
+    ChatClient chatClient;
 }
