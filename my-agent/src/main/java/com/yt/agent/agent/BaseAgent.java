@@ -50,7 +50,7 @@ public abstract class BaseAgent {
     private ChatClient chatClient;
 
     // Memory 记忆（需要自主维护会话上下文）
-    private List<Message> messageList = new ArrayList<>();
+  //  private List<Message> messageList = new ArrayList<>();
 
 
     public String run(String query){

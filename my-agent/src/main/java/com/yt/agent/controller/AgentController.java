@@ -4,6 +4,7 @@ package com.yt.agent.controller;
 import com.alibaba.fastjson.JSON;
 import com.yt.agent.advisor.MyLoggerAdvisor;
 import com.yt.agent.agent.AgentContext;
+import com.yt.agent.config.AgentConfig;
 import com.yt.agent.printer.Printer;
 import com.yt.agent.printer.SSEPrinter;
 import com.yt.agent.req.AgentRequest;
@@ -33,6 +34,9 @@ public class AgentController {
     @Resource
     private AgentHandlerFactory agentHandlerFactory;
 
+    @Resource
+    private AgentConfig agentConfig;
+
 
 
     @PostMapping("/autoAgent")
@@ -55,10 +59,11 @@ public class AgentController {
                     // .streamMessageType(request.getStreamMessageType())
                     .availableTools(allTools)
                     .agentType(request.getAgentType())
-                    .sopPrompt(request.getSopPrompt())
-                    .basePrompt(request.getBasePrompt())
+                    .sopPrompt(request.getAgentType() == 3 ? agentConfig.getUnicornSopPrompt(): "")
+                    .basePrompt(request.getAgentType() == 5 ? agentConfig.getUnicornBasePrompt() : "")
                     .chatClient(ChatClient.builder(openAiChatModel)
                             .defaultAdvisors(new MyLoggerAdvisor())
+
                             .build())
                     .build();
 

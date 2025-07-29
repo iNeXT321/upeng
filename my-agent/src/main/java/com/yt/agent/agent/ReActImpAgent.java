@@ -12,10 +12,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.ai.chat.messages.AssistantMessage;
-import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.ToolResponseMessage;
-import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.messages.*;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -75,16 +72,16 @@ public class ReActImpAgent extends ReActAgent {
         AgentConfig agentConfig = applicationContext.getBean(AgentConfig.class);
         setSystemPrompt(agentConfig.getReactSystemPromptMap().getOrDefault(promptKey, ToolCallPrompt.SYSTEM_PROMPT)
                 .replace("{{tools}}", toolPrompt.toString())
-                .replace("{{query}}", context.getQuery()));
+                .replace("{{query}}", context.getQuery())
 
                // .replace("{{date}}", context.getDateInfo())
-                //.replace("{{basePrompt}}", context.getBasePrompt()))
+                .replace("{{basePrompt}}", context.getBasePrompt()));
 
         setNextStepPrompt(agentConfig.getReactNextStepPromptMap().getOrDefault(nextPromptKey, ToolCallPrompt.NEXT_STEP_PROMPT)
                 .replace("{{tools}}", toolPrompt.toString())
-                .replace("{{query}}", context.getQuery()));
+                .replace("{{query}}", context.getQuery())
               //  .replace("{{date}}", context.getDateInfo())
-               // .replace("{{basePrompt}}", context.getBasePrompt()))
+                .replace("{{basePrompt}}", context.getBasePrompt()));
 
 
         setSystemPromptSnapshot(getSystemPrompt());
@@ -94,8 +91,12 @@ public class ReActImpAgent extends ReActAgent {
 
         this.availableTools = context.getAvailableTools();
         this.toolCallingManager = ToolCallingManager.builder().build();
+
+        Map<String, String> metadata = Map.of("enable_thinking", "false");
         this.chatOptions = OpenAiChatOptions.builder()
                 .internalToolExecutionEnabled(false)
+                .streamUsage(false)
+                .metadata(metadata)
                 .build();
     }
 
@@ -103,19 +104,20 @@ public class ReActImpAgent extends ReActAgent {
     @Override
     public boolean think() {
         // 1、校验提示词，拼接用户提示词
-        if (StrUtil.isNotBlank(getNextStepPrompt())) {
+        if (getMemory().getLastMessage().getMessageType() != MessageType.USER) {
             UserMessage userMessage = new UserMessage(getNextStepPrompt());
-            getMessageList().add(userMessage);
+            getMemory().addMessage(userMessage);
         }
         // 2、调用 AI 大模型，获取工具调用结果
-        List<Message> messageList = getMessageList();
-        Prompt prompt = new Prompt(messageList, this.chatOptions);
+        Prompt prompt = new Prompt( getMemory().getMessages(), this.chatOptions);
         try{
             // 获取带工具选项的响应
             context.setStreamMessageType("tool_thought");
 
-            ChatResponse chatResponse = getChatClient().prompt(prompt)
+            ChatResponse chatResponse = getChatClient()
+                    .prompt(prompt)
                     .system(getSystemPrompt())
+                    .options(chatOptions)
                     .toolCallbacks(availableTools)
                     .call()
                     .chatResponse();
@@ -139,7 +141,7 @@ public class ReActImpAgent extends ReActAgent {
             log.info(toolCallInfo);
 
             //将消息通过Sse输出
-            if (!context.getIsStream() && !StringUtils.isEmpty(result)) {
+            if (context.getIsStream() && !StringUtils.isEmpty(result)) {
                 printer.send("tool_thought", result);
             }
             //将消息存入到Memory中
@@ -148,7 +150,7 @@ public class ReActImpAgent extends ReActAgent {
             return true;
         }catch (Exception e){
             log.error(getName() + "的思考过程遇到了问题：" + e.getMessage());
-            getMessageList().add(new AssistantMessage("处理时遇到了错误：" + e.getMessage()));
+            getMemory().addMessage(new AssistantMessage("处理时遇到了错误：" + e.getMessage()));
             setState(AgentState.FINISHED);
             return false;
         }
@@ -161,7 +163,7 @@ public class ReActImpAgent extends ReActAgent {
             return getMemory().getLastMessage().getText();
         }
         // 调用工具
-        Prompt prompt = new Prompt(getMessageList(), this.chatOptions);
+        Prompt prompt = new Prompt(getMemory().getMessages(), this.chatOptions);
         ToolExecutionResult toolExecutionResult = toolCallingManager.executeToolCalls(prompt, toolCallChatResponse);
         ToolResponseMessage toolResponseMessage = (ToolResponseMessage) CollUtil.getLast(toolExecutionResult.conversationHistory());
 
@@ -184,22 +186,6 @@ public class ReActImpAgent extends ReActAgent {
         getMemory().addMessage(toolResponseMessage);
 
         return String.join("\n\n", results);
-
-        // 记录消息上下文，conversationHistory 已经包含了助手消息和工具调用返回的结果
-//        setMessageList(toolExecutionResult.conversationHistory());
-//        ToolResponseMessage toolResponseMessage = (ToolResponseMessage) CollUtil.getLast(toolExecutionResult.conversationHistory());
-        // 判断是否调用了终止工具
-//        boolean terminateToolCalled = toolResponseMessage.getResponses().stream()
-//                .anyMatch(response -> response.name().equals("terminate"));
-//        if (terminateToolCalled) {
-//            // 任务结束，更改状态
-//            setState(AgentState.FINISHED);
-//        }
-//        String results = toolResponseMessage.getResponses().stream()
-//                .map(response -> "工具 " + response.name() + " 返回的结果：" + response.responseData())
-//                .collect(Collectors.joining("\n"));
-//        log.info(results);
-
     }
 
     @Override
