@@ -29,7 +29,7 @@ public class AgentController {
     private ToolCallback[] allTools;
 
     @Resource
-    private ChatModel openAiChatModel;
+    private ChatModel zhiPuAiChatModel;
 
     @Resource
     private AgentHandlerFactory agentHandlerFactory;
@@ -61,7 +61,7 @@ public class AgentController {
                     .agentType(request.getAgentType())
                     .sopPrompt(request.getAgentType() == 3 ? agentConfig.getUnicornSopPrompt(): "")
                     .basePrompt(request.getAgentType() == 5 ? agentConfig.getUnicornBasePrompt() : "")
-                    .chatClient(ChatClient.builder(openAiChatModel)
+                    .chatClient(ChatClient.builder(zhiPuAiChatModel)
                             .defaultAdvisors(new MyLoggerAdvisor())
 
                             .build())

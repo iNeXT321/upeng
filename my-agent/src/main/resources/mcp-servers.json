@@ -9,6 +9,32 @@
       "env": {
         "AMAP_MAPS_API_KEY": "8a7f41896b7dd171341307b43a9c7ca6"
       }
+    },
+    "playwright": {
+      "command": "npx.cmd",
+      "args": [
+        "@playwright/mcp@latest"
+      ]
+    },
+    "mysql": {
+      "command": "npx.cmd",
+      "args": [
+        "mysql-mcp-server"
+      ],
+      "env": {
+        "MYSQL_HOST": "localhost",
+        "MYSQL_PORT": "3306",
+        "MYSQL_USER": "root",
+        "MYSQL_PASSWORD": "root",
+        "MYSQL_DATABASE": "test1"
+      }
+    },
+    "mcp-server-chart": {
+      "command": "npx.cmd",
+      "args": [
+        "-y",
+        "@antv/mcp-server-chart"
+      ]
     }
   }
 }
