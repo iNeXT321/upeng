@@ -10,6 +10,7 @@ import com.yt.agent.printer.SSEPrinter;
 import com.yt.agent.req.AgentRequest;
 import com.yt.agent.service.AgentHandlerService;
 import com.yt.agent.service.impl.AgentHandlerFactory;
+import com.yt.agent.tools.ToolRegistration;
 import com.yt.agent.utils.ThreadUtil;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -25,8 +26,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RequestMapping("/ai")
 public class AgentController {
 
-    @Resource
-    private ToolCallback[] allTools;
+//    @Resource
+//    private ToolCallback[] allTools;
 
     @Resource
     private ChatModel zhiPuAiChatModel;
@@ -36,6 +37,9 @@ public class AgentController {
 
     @Resource
     private AgentConfig agentConfig;
+
+    @Resource
+    private ToolRegistration toolRegistration;
 
 
 
@@ -57,7 +61,7 @@ public class AgentController {
                     //.dateInfo(request.getDateInfo())
                     .isStream(request.getIsStream())
                     // .streamMessageType(request.getStreamMessageType())
-                    .availableTools(allTools)
+                   // .availableTools(allTools)
                     .agentType(request.getAgentType())
                     .sopPrompt(request.getAgentType() == 3 ? agentConfig.getUnicornSopPrompt(): "")
                     .basePrompt(request.getAgentType() == 5 ? agentConfig.getUnicornBasePrompt() : "")
@@ -66,6 +70,9 @@ public class AgentController {
 
                             .build())
                     .build();
+
+            //构建工具列表
+            context.setAvailableTools(toolRegistration.allTools(context));
 
             // 根据数据类型获取对应的处理器
             AgentHandlerService handler = agentHandlerFactory.getHandler(context, request);

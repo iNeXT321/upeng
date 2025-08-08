@@ -10,12 +10,6 @@
         "AMAP_MAPS_API_KEY": "8a7f41896b7dd171341307b43a9c7ca6"
       }
     },
-    "playwright": {
-      "command": "npx.cmd",
-      "args": [
-        "@playwright/mcp@latest"
-      ]
-    },
     "mysql": {
       "command": "npx.cmd",
       "args": [

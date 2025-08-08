@@ -54,7 +54,7 @@ public abstract class BaseAgent {
 
 
     public String run(String query){
-        setState(AgentState.RUNNING);
+        setState(AgentState.IDLE);
 
         if(!query.isEmpty()){
             updateMemory(MessageType.USER, query, null, null);
@@ -72,7 +72,7 @@ public abstract class BaseAgent {
 
             if (currentStep >= maxSteps) {
                 currentStep = 0;
-                setState(AgentState.FINISHED);
+                setState(AgentState.IDLE);
                 results.add("Terminated: Reached max steps (" + maxSteps + ")");
             }
         }catch (Exception e){
