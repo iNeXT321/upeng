@@ -23,7 +23,7 @@ public class ThreadUtil {
 
     public static void execute(Runnable runnable) {
         if (executor == null) {
-            initPool(100);
+            initPool(50);
         }
 
         executor.execute(runnable);

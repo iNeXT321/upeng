@@ -32,17 +32,22 @@ spring:
 
 
 
-    # 临时注释掉，便于大家开发调试和部署（实际需要启动 MCP 服务）
     mcp:
       client:
+        request-timeout: 600000
         sse:
           connections:
             server1:
-              url: http://localhost:8127
+              url: http://localhost:9999
+
+
         stdio:
           servers-configuration: classpath:mcp-servers.json
 
 server:
+  tomcat:
+    connection-timeout: 0   # 不限制
+    keep-alive-timeout: -1 # 不限制
   port: 8123
   servlet:
     context-path: /api

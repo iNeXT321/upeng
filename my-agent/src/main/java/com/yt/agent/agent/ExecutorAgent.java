@@ -3,12 +3,14 @@ package com.yt.agent.agent;
 import cn.hutool.core.collection.CollUtil;
 import com.alibaba.fastjson.JSON;
 import com.yt.agent.agent.enums.AgentState;
+import com.yt.agent.agent.prompt.ExecutorPrompt;
 import com.yt.agent.agent.prompt.ToolCallPrompt;
 import com.yt.agent.config.AgentConfig;
 import com.yt.agent.response.AgentResponse;
 import com.yt.agent.utils.MessageUtils;
 import com.yt.agent.utils.SpringContextHolder;
 import com.yt.agent.utils.ThreadUtil;
+import com.yt.agent.utils.TokenCounter;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.extern.slf4j.Slf4j;
@@ -70,12 +72,15 @@ public class ExecutorAgent extends ReActAgent {
         String promptKey = "default";
         String sopPromptKey = "default";
         String nextPromptKey = "default";
-        setSystemPrompt(agentConfig.getExecutorSystemPromptMap().getOrDefault(promptKey, ToolCallPrompt.SYSTEM_PROMPT)
-                .replace("{{tools}}", toolPrompt.toString())
-                .replace("{{query}}", context.getQuery())
-              //  .replace("{{date}}", context.getDateInfo())
-                .replace("{{sopPrompt}}", context.getSopPrompt())
-                .replace("{{executorSopPrompt}}", agentConfig.getExecutorSopPromptMap().getOrDefault(sopPromptKey, "")));
+//        setSystemPrompt(agentConfig.getExecutorSystemPromptMap().getOrDefault(promptKey, ToolCallPrompt.SYSTEM_PROMPT)
+//                .replace("{{tools}}", toolPrompt.toString())
+//                .replace("{{query}}", context.getQuery())
+//              //  .replace("{{date}}", context.getDateInfo())
+//                .replace("{{sopPrompt}}", context.getSopPrompt())
+//                .replace("{{executorSopPrompt}}", agentConfig.getExecutorSopPromptMap().getOrDefault(sopPromptKey, "")));
+
+        setSystemPrompt(ExecutorPrompt.PPT_SYSTEM_PROMPT);
+
         setNextStepPrompt(agentConfig.getExecutorNextStepPromptMap().getOrDefault(nextPromptKey, ToolCallPrompt.NEXT_STEP_PROMPT)
                 .replace("{{tools}}", toolPrompt.toString())
                 .replace("{{query}}", context.getQuery())
@@ -124,6 +129,9 @@ public class ExecutorAgent extends ReActAgent {
         try {
             // 获取带工具选项的响应
             //log.info("{} executor ask tool {}", context.getRequestId(), JSON.toJSONString(availableTools));
+
+            log.info("{} executor 上下文大小 {}", context.getRequestId(),
+                    TokenCounter.calculateTotalTokens(getMemory().getMessages()));
 
             Prompt prompt = new Prompt(getMemory().getMessages(), this.chatOptions);
             ChatResponse chatResponse = getChatClient()

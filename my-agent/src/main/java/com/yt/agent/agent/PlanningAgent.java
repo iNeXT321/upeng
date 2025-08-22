@@ -85,11 +85,13 @@ public class PlanningAgent extends ReActAgent {
 
         String promptKey = "default";
         String nextPromptKey = "default";
-        setSystemPrompt(agentConfig.getPlannerSystemPromptMap().getOrDefault(promptKey, PlanningPrompt.SYSTEM_PROMPT)
-                .replace("{{tools}}", toolPrompt.toString())
-                .replace("{{query}}", context.getQuery())
-             //   .replace("{{date}}", context.getDateInfo())
-                .replace("{{sopPrompt}}", context.getSopPrompt()));
+//        setSystemPrompt(agentConfig.getPlannerSystemPromptMap().getOrDefault(promptKey, PlanningPrompt.SYSTEM_PROMPT)
+//                .replace("{{tools}}", toolPrompt.toString())
+//                .replace("{{query}}", context.getQuery())
+//             //   .replace("{{date}}", context.getDateInfo())
+//                .replace("{{sopPrompt}}", context.getSopPrompt()));
+
+        setSystemPrompt(PlanningPrompt.PPT_SYSTEM_PROMPT);
         setNextStepPrompt(agentConfig.getPlannerNextStepPromptMap().getOrDefault(nextPromptKey, PlanningPrompt.NEXT_STEP_PROMPT)
                 .replace("{{tools}}", toolPrompt.toString())
                 .replace("{{query}}", context.getQuery())

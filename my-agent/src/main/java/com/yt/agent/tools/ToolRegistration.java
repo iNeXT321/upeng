@@ -30,10 +30,10 @@ public class ToolRegistration {
         ToolCallback[] mcpTools = toolCallbackProvider.getToolCallbacks();
 
        // TerminateTool terminateTool = new TerminateTool();
-        ReportTool reportTool = new ReportTool(agentContext);
+      //  ReportTool reportTool = new ReportTool(agentContext);
         ToolCallback[] localTools = ToolCallbacks.from(
              //   terminateTool,
-                reportTool
+              //  reportTool
         );
 
         ToolCallback[] array = Stream.concat(

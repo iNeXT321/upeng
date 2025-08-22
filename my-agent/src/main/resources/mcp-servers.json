@@ -1,34 +1,16 @@
 {
   "mcpServers": {
-    "amap-maps": {
-      "command": "npx.cmd",
+    "bocha-search-mcp": {
+      "command": "uv",
       "args": [
-        "-y",
-        "@amap/amap-maps-mcp-server"
+        "--directory",
+        "D:\\mcp\\bocha-search-mcp\\bocha-search-mcp-master",
+        "run",
+        "bocha-search-mcp"
       ],
       "env": {
-        "AMAP_MAPS_API_KEY": "8a7f41896b7dd171341307b43a9c7ca6"
+        "BOCHA_API_KEY": "sk-e5bb3b7427744fd8b0498ab903b479f3"
       }
-    },
-    "mysql": {
-      "command": "npx.cmd",
-      "args": [
-        "mysql-mcp-server"
-      ],
-      "env": {
-        "MYSQL_HOST": "localhost",
-        "MYSQL_PORT": "3306",
-        "MYSQL_USER": "root",
-        "MYSQL_PASSWORD": "root",
-        "MYSQL_DATABASE": "test1"
-      }
-    },
-    "mcp-server-chart": {
-      "command": "npx.cmd",
-      "args": [
-        "-y",
-        "@antv/mcp-server-chart"
-      ]
     }
   }
 }

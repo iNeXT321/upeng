@@ -33,7 +33,7 @@ public class MyLoggerAdvisor implements CallAdvisor, StreamAdvisor {
 	}
 
 	private void observeAfter(ChatClientResponse chatClientResponse) {
-		log.info("AI Response: {}", chatClientResponse.chatResponse().getResult().getOutput().getText());
+		//log.info("AI Response: {}", chatClientResponse.chatResponse().getResult().getOutput().getText());
 	}
 
 	@Override
