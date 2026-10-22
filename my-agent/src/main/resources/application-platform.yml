@@ -54,6 +54,8 @@ agent:
     acquire-timeout-ms: 500
     sse-timeout-ms: 1800000         # SSE 连接最长存活（30 分钟）
     heartbeat-interval-ms: 15000
+    # 客户端全部断开后的宽限期：期内重连继续执行，超时才取消 Agent（网络抖动 ≠ 用户放弃）
+    disconnect-grace-ms: 30000
 
   # ---------- 安全护栏 ----------
   guard:
@@ -105,3 +107,22 @@ logging:
   level:
     org.springframework.ai: INFO
     com.yt.agent: INFO
+
+  # ---------- 认证（Spring Security + JWT，无状态） ----------
+  auth:
+    # 生产必须通过环境变量注入 >=32 字节密钥；不配置则每次重启生成临时密钥（全员掉线）
+    secret: ${AGENT_JWT_SECRET:}
+    ttl-minutes: 720
+    default-username: admin
+    default-password: ${AGENT_DEFAULT_PASSWORD:agent123}
+    registration-enabled: true
+
+# ---------- 入口限流（Resilience4j 令牌桶） ----------
+# 面试高频：令牌桶 vs 漏桶 vs 滑动窗口。令牌桶允许突发、平滑补充，适合 LLM 网关入口。
+resilience4j:
+  rate-limiter:
+    instances:
+      agent:
+        limit-for-period: 30        # 每 10s 允许 30 次 Agent 请求
+        limit-refresh-period: 10s
+        timeout-duration: 0s        # 不排队，立即拒绝（429），避免请求堆积

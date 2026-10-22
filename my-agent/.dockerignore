@@ -1,0 +1,13 @@
+target/
+.idea/
+*.iml
+logs/
+data/
+knowledge/
+.agent/
+.workbuddy/
+mcp-servers.local.json
+agent-frontend/
+docs/
+*.md
+.git/

@@ -183,6 +183,34 @@
         </dependency>
 
         <!-- ===== 平台化能力依赖 ===== -->
+        <!-- 认证：Spring Security + JWT（无状态鉴权，SSE 走 Authorization 头） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.12.6</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.12.6</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.12.6</version>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- 限流/熔断：Resilience4j（面试常问：限流算法与降级） -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot3</artifactId>
+            <version>2.2.0</version>
+        </dependency>
         <!-- 指标：不引入 actuator，仅用 micrometer 核心，可通过 /ai/stats 输出，后续可替换为 Prometheus Registry -->
         <dependency>
             <groupId>io.micrometer</groupId>

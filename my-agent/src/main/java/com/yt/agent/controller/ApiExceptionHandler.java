@@ -46,6 +46,16 @@ public class ApiExceptionHandler {
         return build(HttpStatus.CONFLICT, "ILLEGAL_STATE", e.getMessage(), request);
     }
 
+    /** 触发限流——429 + Retry-After，客户端据此做退避重试 */
+    @ExceptionHandler(com.yt.agent.platform.rate.RateLimitedException.class)
+    public ResponseEntity<Map<String, Object>> handleRateLimited(
+            com.yt.agent.platform.rate.RateLimitedException e, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Retry-After", "2")
+                .body(Map.of("code", "RATE_LIMITED", "message", e.getMessage(),
+                        "path", request.getRequestURI(), "timestamp", System.currentTimeMillis()));
+    }
+
     /** 请求方式不对（如对只支持 POST 的接口发 GET）——必须 405，不能被兜底成 500 */
     @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<Map<String, Object>> handleMethodNotSupported(

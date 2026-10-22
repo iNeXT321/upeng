@@ -3,16 +3,20 @@ package com.yt.agent.controller;
 import com.alibaba.fastjson.JSON;
 import com.yt.agent.agent.enums.AgentType;
 import com.yt.agent.platform.guard.GuardChain;
+import com.yt.agent.platform.rate.RateLimitedException;
 import com.yt.agent.platform.runtime.AgentRuntime;
 import com.yt.agent.platform.runtime.AgentRuntimeProperties;
-import com.yt.agent.platform.runtime.CancellationToken;
-import com.yt.agent.platform.runtime.CancellationRegistry;
+import com.yt.agent.platform.stream.SseHub;
+import com.yt.agent.platform.stream.SseHubRegistry;
 import com.yt.agent.printer.GuardedPrinter;
 import com.yt.agent.printer.Printer;
 import com.yt.agent.printer.SSEPrinter;
 import com.yt.agent.req.AgentRequest;
 import com.yt.agent.utils.StringUtil;
+import io.github.resilience4j.ratelimiter.RateLimiter;
+import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,42 +30,26 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Agent HTTP 入口（SSE 流式）。
  *
- * <p>本类只做三件事：<b>适配 HTTP</b>（SseEmitter 生命周期）、<b>参数归一化</b>、
- * <b>把活交给 {@link AgentRuntime}</b>。业务编排全部下沉，避免又回到
- * "Controller 里塞满 200 行、异常路径漏掉 emitter.complete()"的老问题。</p>
+ * <p>本类只做四件事：<b>适配 HTTP</b>（SSE 生命周期交给 {@link SseHub}）、
+ * <b>参数归一化</b>、<b>限流准入</b>、<b>把活交给 {@link AgentRuntime}</b>。</p>
  *
- * <p>本次修复的连接层缺陷：
+ * <p>连接层能力（行业标准的流式对话网关形态）：</p>
  * <ol>
- *   <li>异常时未 complete → 连接悬挂直到网关超时（现在 finally 保证关闭）；</li>
- *   <li>心跳任务未取消 → 每个请求泄漏一个调度任务，越跑越多；</li>
- *   <li>心跳用字符串 "heartbeat" 混在业务消息流里 → 前端可能误当消息渲染，
- *       改用 SSE comment（协议层心跳，不进入 onmessage）；</li>
- *   <li>客户端断开后服务端仍继续跑完 40 步 → onCompletion/onError 取消令牌，
- *       真正停止推理（省钱、省算力）。</li>
+ *   <li>事件带 seq 序号 + 服务端事件日志：客户端断线后带 Last-Event-ID 重连同一 requestId，
+ *       只补缺失事件，Agent 不重跑、不重复计费；</li>
+ *   <li>断线宽限取消：全部连接断开 30s 内重连则继续执行，超时才取消，兼顾体验与成本；</li>
+ *   <li>入口限流：全局令牌桶快速拒绝（429），保护下游模型配额；</li>
+ *   <li>异常路径 finally 保证 hub 收尾，不悬挂连接。</li>
  * </ol>
- * </p>
  */
 @Slf4j
 @RestController
 @RequestMapping("/ai")
 public class AgentController {
-
-    /** 心跳调度器：单线程足够（心跳只是写 socket，不阻塞），daemon 避免影响停机 */
-    private static final ScheduledExecutorService HEARTBEAT =
-            Executors.newSingleThreadScheduledExecutor(r -> {
-                Thread t = new Thread(r, "sse-heartbeat");
-                t.setDaemon(true);
-                return t;
-            });
 
     @Resource
     private AgentRuntime agentRuntime;
@@ -73,14 +61,17 @@ public class AgentController {
     private AgentRuntimeProperties runtimeProperties;
 
     @Resource
-    private CancellationRegistry cancellationRegistry;
+    private SseHubRegistry sseHubRegistry;
+
+    @Resource
+    private RateLimiterRegistry rateLimiterRegistry;
 
     @Resource
     @Qualifier("agentWorkerExecutor")
     private ExecutorService worker;
 
     @PostMapping("/autoAgent")
-    public SseEmitter autoAgent(@RequestBody AgentRequest request) {
+    public SseEmitter autoAgent(@RequestBody AgentRequest request, HttpServletRequest httpRequest) {
         normalize(request);
         log.info("{} auto agent request: {}", request.getRequestId(), JSON.toJSONString(request));
 
@@ -89,31 +80,45 @@ public class AgentController {
             return immediateError("EMPTY_QUERY", "问题内容不能为空。");
         }
 
-        SseEmitter emitter = new SseEmitter(runtimeProperties.getSseTimeoutMs());
-        CancellationToken token = cancellationRegistry.register(request.getRequestId());
+        // 入口限流：令牌桶拒绝时抛 429，保护下游模型配额（不排队堆积）
+        RateLimiter limiter = rateLimiterRegistry.rateLimiter("agent");
+        if (!limiter.acquirePermission()) {
+            log.warn("{} rate limited", request.getRequestId());
+            throw new RateLimitedException("请求过于频繁，请稍后再试");
+        }
 
-        ScheduledFuture<?> heartbeat = startHeartbeat(emitter, request.getRequestId());
-        AtomicBoolean closedByServer = new AtomicBoolean(false);
-        registerMonitor(emitter, request.getRequestId(), heartbeat, token, closedByServer);
+        // 断线重连：Last-Event-ID 指向客户端最后收到的事件序号
+        Long lastEventId = parseLastEventId(httpRequest.getHeader("Last-Event-ID"));
+        // 同一 requestId 只有一个执行（hub 幂等创建），重连/新请求共用
+        SseHub hub = sseHubRegistry.getOrCreate(request.getRequestId());
+        SseEmitter emitter = hub.attach(lastEventId);
+        if (hub.isRunning() || hub.isFinished()) {
+            // 已有执行在跑或已结束：当前连接只做事件回放/续传，不重复执行
+            log.info("{} 复用进行中/已完成的执行 (running={}, finished={})",
+                    request.getRequestId(), hub.isRunning(), hub.isFinished());
+            return emitter;
+        }
 
+        hub.markRunning();
         Printer printer = new GuardedPrinter(
-                new SSEPrinter(emitter, request, request.getAgentType()), guardChain);
+                new SSEPrinter(hub, request, request.getAgentType()), guardChain);
 
+        // MDC 上下文快照：虚拟线程池里的日志要与 HTTP 线程共用同一个 traceId/uid
+        Map<String, String> mdc = org.slf4j.MDC.getCopyOfContextMap();
         worker.execute(() -> {
+            if (mdc != null) {
+                org.slf4j.MDC.setContextMap(mdc);
+            }
             try {
                 agentRuntime.execute(request, printer);
             } catch (Exception e) {
                 // Runtime 已把业务异常转成 error 事件；走到这里说明是发送/收尾阶段的意外
                 log.error("{} auto agent unexpected error", request.getRequestId(), e);
             } finally {
-                closedByServer.set(true);
-                heartbeat.cancel(true);
-                try {
-                    emitter.complete();
-                } catch (Exception e) {
-                    log.debug("{} emitter complete ignored: {}", request.getRequestId(), e.getMessage());
-                }
+                hub.complete();
+                sseHubRegistry.markFinished(request.getRequestId());
                 log.info("{} auto agent request complete", request.getRequestId());
+                org.slf4j.MDC.clear();
             }
         });
         return emitter;
@@ -148,6 +153,17 @@ public class AgentController {
         }
     }
 
+    private Long parseLastEventId(String header) {
+        if (header == null || header.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(header.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     private SseEmitter immediateError(String code, String message) {
         SseEmitter emitter = new SseEmitter(0L);
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -160,45 +176,5 @@ public class AgentController {
         }
         emitter.complete();
         return emitter;
-    }
-
-    private ScheduledFuture<?> startHeartbeat(SseEmitter emitter, String requestId) {
-        long interval = Math.max(1000L, runtimeProperties.getHeartbeatIntervalMs());
-        return HEARTBEAT.scheduleAtFixedRate(() -> {
-            try {
-                // 用 comment 而不是业务消息：EventSource 不会把 comment 交给 onmessage
-                emitter.send(SseEmitter.event().comment("keep-alive"));
-            } catch (Exception e) {
-                log.info("{} heartbeat failed, closing connection: {}", requestId, e.getMessage());
-                try {
-                    emitter.completeWithError(e);
-                } catch (Exception ignored) {
-                    // 已经关闭
-                }
-            }
-        }, interval, interval, TimeUnit.MILLISECONDS);
-    }
-
-    private void registerMonitor(SseEmitter emitter, String requestId, ScheduledFuture<?> heartbeat,
-                                 CancellationToken token, AtomicBoolean closedByServer) {
-        emitter.onCompletion(() -> {
-            heartbeat.cancel(true);
-            // 服务端主动 complete 时不算取消；客户端断开才需要停止推理
-            if (!closedByServer.get()) {
-                log.info("{} SSE completed by client, cancelling agent", requestId);
-                token.cancel("client_disconnected");
-            }
-        });
-        emitter.onTimeout(() -> {
-            log.info("{} SSE connection timed out", requestId);
-            heartbeat.cancel(true);
-            token.cancel("sse_timeout");
-            emitter.complete();
-        });
-        emitter.onError((ex) -> {
-            log.info("{} SSE connection error: {}", requestId, ex.getMessage());
-            heartbeat.cancel(true);
-            token.cancel("sse_error");
-        });
     }
 }

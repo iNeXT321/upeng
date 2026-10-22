@@ -1,0 +1,61 @@
+# ===== AI Agent 平台一键编排 =====
+# 用法：
+#   export DEEPSEEK_API_KEY=sk-xxx
+#   export AGENT_JWT_SECRET=<至少32字节的随机串>
+#   docker compose up -d --build
+# 访问：http://localhost:8080（前端），默认账号 admin / agent123（首次登录后请改密码）
+# 附加 PostgreSQL（可选）：docker compose --profile db up -d
+
+services:
+  backend:
+    build: .
+    container_name: agent-backend
+    restart: unless-stopped
+    environment:
+      # 模型密钥：生产从 CI/Secret 管理注入，绝不写死
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
+      # JWT 密钥：>=32 字节；不配置则每次重启生成临时密钥（所有用户掉线）
+      AGENT_JWT_SECRET: ${AGENT_JWT_SECRET:-}
+      AGENT_DEFAULT_PASSWORD: ${AGENT_DEFAULT_PASSWORD:-agent123}
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75.0 -XX:+UseZGC"
+      # 持久化：未启用 db profile 时用容器内 H2 文件（挂卷保留）
+      AGENT_PERSISTENCE_URL: ${AGENT_PERSISTENCE_URL:-}
+    volumes:
+      - agent-data:/app/data
+    ports:
+      - "8123:8123"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8123/api/ai/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+
+  frontend:
+    build: ./agent-frontend
+    container_name: agent-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+
+  # 可选：生产级持久化（切换时给 backend 加 AGENT_PERSISTENCE_URL=jdbc:postgresql://postgres:5432/agent）
+  postgres:
+    image: postgres:16-alpine
+    container_name: agent-postgres
+    restart: unless-stopped
+    profiles: ["db"]
+    environment:
+      POSTGRES_DB: agent
+      POSTGRES_USER: agent
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agent_pg_pass}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  agent-data:
+  pg-data:

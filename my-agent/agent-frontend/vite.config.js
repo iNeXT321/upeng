@@ -12,6 +12,13 @@ export default defineConfig({
   },
   server: {
     port: 3000,
-    cors: true
+    cors: true,
+    // 开发期代理到后端（生产由 nginx 转发，见 nginx.conf）
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8123',
+        changeOrigin: true
+      }
+    }
   }
 })

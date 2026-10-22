@@ -38,4 +38,10 @@ public class AgentRuntimeProperties {
 
     /** 心跳间隔 */
     private long heartbeatIntervalMs = 15_000L;
+
+    /**
+     * 客户端断开后的宽限期（毫秒）：期内重连则继续执行，超时无人认领才取消 Agent。
+     * 网络抖动 ≠ 用户放弃，立刻取消会让断线重连变成"重新计费"。
+     */
+    private long disconnectGraceMs = 30_000L;
 }

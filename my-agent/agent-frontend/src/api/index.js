@@ -1,54 +1,62 @@
 import axios from 'axios'
 
-// 根据环境变量设置 API 基础 URL
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
- ? '/api' // 生产环境使用相对路径，适用于前后端部署在同一域名下
- : 'http://localhost:8123/api' // 开发环境指向本地后端服务
-
-// 创建axios实例
-const request = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 60000
+/**
+ * REST API 客户端。
+ * 开发环境走 vite 代理（/api → http://localhost:8123）；
+ * 生产环境由 nginx 把 /api 转发到后端，前端代码零改动。
+ */
+const http = axios.create({
+  baseURL: '/api',
+  timeout: 30000,
+  headers: { 'Content-Type': 'application/json' }
 })
 
-// 封装SSE连接
-export const connectSSE = (url, params, onMessage, onError) => {
-  // 构建带参数的URL
-  const queryString = Object.keys(params)
-    .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
-    .join('&')
-  
-  const fullUrl = `${API_BASE_URL}${url}?${queryString}`
-  
-  // 创建EventSource
-  const eventSource = new EventSource(fullUrl)
-  
-  eventSource.onmessage = event => {
-    let data = event.data
-    
-    // 检查是否是特殊标记
-    if (data === '[DONE]') {
-      if (onMessage) onMessage('[DONE]')
-    } else {
-      // 处理普通消息
-      if (onMessage) onMessage(data)
+/* 请求拦截：统一附加 JWT */
+http.interceptors.request.use((config) => {
+  const token = localStorage.getItem('agent_token')
+  if (token) config.headers.Authorization = `Bearer ${token}`
+  return config
+})
+
+http.interceptors.response.use(
+  (res) => res.data,
+  (err) => {
+    const status = err.response?.status
+    const body = err.response?.data
+    // 401：token 缺失/过期 —— 清会话跳登录（SSE 的 401 由 sse.js 同步处理）
+    if (status === 401 && !err.config?.url?.includes('/auth/login')) {
+      localStorage.removeItem('agent_token')
+      localStorage.removeItem('agent_user')
+      if (!window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login?expired=1'
+      }
     }
+    const msg = body?.message || err.message || '网络错误'
+    return Promise.reject(new Error(msg))
   }
-  
-  eventSource.onerror = error => {
-    if (onError) onError(error)
-    eventSource.close()
-  }
-  
-  // 返回eventSource实例，以便后续可以关闭连接
-  return eventSource
-}
+)
 
-// AI超级智能体聊天
-export const chatWithManus = (message) => {
-  return connectSSE('/ai/autoAgent', { message })
-}
+/* ---------------- 认证 ---------------- */
+export const login = (username, password) => http.post('/auth/login', { username, password })
+export const register = (username, password, displayName) =>
+  http.post('/auth/register', { username, password, displayName })
+export const getMe = () => http.get('/auth/me')
 
-export default {
-  chatWithManus
-} 
+/* ---------------- 平台运维 ---------------- */
+export const getHealth = () => http.get('/ai/health')
+export const getStats = () => http.get('/ai/stats')
+export const getTools = () => http.get('/ai/tools')
+export const stopAgent = (requestId) => http.post(`/ai/stop/${requestId}`)
+
+/* ---------------- 会话 ---------------- */
+export const listSessions = (userId, limit = 50) =>
+  http.get('/ai/sessions', { params: { userId, limit } })
+export const getSessionDetail = (sessionId, limit = 100) =>
+  http.get(`/ai/sessions/${sessionId}`, { params: { limit } })
+export const clearSession = (sessionId) => http.delete(`/ai/sessions/${sessionId}`)
+
+/* ---------------- 知识库 ---------------- */
+export const getKnowledge = () => http.get('/ai/knowledge')
+export const searchKnowledge = (q, topK = 4) =>
+  http.get('/ai/knowledge/search', { params: { q, topK } })
+export const ingestKnowledge = (payload) => http.post('/ai/knowledge', payload)

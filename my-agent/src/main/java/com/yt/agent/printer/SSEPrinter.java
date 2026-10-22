@@ -17,15 +17,18 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
+import com.yt.agent.platform.stream.SseHub;
+
 @Slf4j
 @Setter
 public class SSEPrinter implements Printer {
-    private SseEmitter emitter;
+    /** 事件经由 SseHub 广播：支持多连接、seq 序号、断线回放 */
+    private SseHub hub;
     private AgentRequest request;
     private Integer agentType;
 
-    public SSEPrinter(SseEmitter emitter, AgentRequest request, Integer agentType) {
-        this.emitter = emitter;
+    public SSEPrinter(SseHub hub, AgentRequest request, Integer agentType) {
+        this.hub = hub;
         this.request = request;
         this.agentType = agentType;
     }
@@ -128,7 +131,7 @@ public class SSEPrinter implements Printer {
                     break;
             }
 
-            emitter.send(response);
+            hub.publish(response);
 
         } catch (Exception e) {
             log.error("sse send error ", e);
@@ -152,7 +155,7 @@ public class SSEPrinter implements Printer {
 
     @Override
     public void close() {
-        emitter.complete();
+        hub.complete();
     }
 
     @Override
