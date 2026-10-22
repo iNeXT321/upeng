@@ -2,6 +2,7 @@ package com.yt.agent.agent;
 
 import com.yt.agent.agent.dto.TaskSummaryResult;
 import com.yt.agent.config.AgentConfig;
+import com.yt.agent.platform.llm.ModelRole;
 import com.yt.agent.utils.MessageUtils;
 import com.yt.agent.utils.SpringContextHolder;
 import lombok.Data;
@@ -50,7 +51,7 @@ public class SummaryAgent extends BaseAgent {
 
         setContext(context);
         setRequestId(context.getRequestId());
-        setChatClient(context.getChatClient());
+        setChatClient(context.getLlm() != null ? context.getLlm().chat(ModelRole.SUMMARY) : context.getChatClient());
         setMessageSizeLimit(agentConfig.getMessageSizeLimit());
 
         this.chatOptions = ToolCallingChatOptions.builder()

@@ -47,6 +47,23 @@ public class StringUtil {
         return uuid.toString();
     }
 
+    /**
+     * 安全截断：不会把 UTF-16 代理对（emoji、部分生僻字）从中间劈开。
+     *
+     * <p>直接用 {@code substring(0, n)} 截断是很常见的写法，但当一个 emoji 正好跨在
+     * 边界上时会产生非法字符，下游模型可能报 400 或输出乱码。这里向前回退一位修正。</p>
+     */
+    public static String truncateSafely(String text, int maxChars) {
+        if (text == null || maxChars <= 0 || text.length() <= maxChars) {
+            return text;
+        }
+        int end = maxChars;
+        if (end > 0 && Character.isHighSurrogate(text.charAt(end - 1))) {
+            end--;
+        }
+        return text.substring(0, end) + "\n...[内容过长已截断]";
+    }
+
     public static void main(String[] args) {
 
         System.out.println(getUUID());

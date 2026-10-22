@@ -1,0 +1,107 @@
+# =====================================================================
+# 平台化配置：模型网关 / 运行时 / 护栏 / 工具治理 / 持久化 / 知识库
+# 与业务提示词（application.yml）分离，便于按环境覆盖与评审
+# =====================================================================
+agent:
+
+  # ---------- 模型网关 ----------
+  # 角色化路由：不同环节用不同模型/温度，换厂商只改这里
+  llm:
+    enabled: true
+    # DeepSeek（OpenAI 兼容协议）：换厂商只需改 provider/model，代码零改动。
+    # 切回智谱：provider 改 zhipuai、model 改 glm-4.5 即可。
+    default-provider: openai
+    default-model: deepseek-flash
+    max-attempts: 2
+    retry-backoff-ms: 400
+    call-timeout-ms: 120000
+    fallback-to-any-provider: true
+    # 降级顺序：主模型限流/超时后按序尝试。启用本地 Ollama 兜底时取消下一行注释，
+    # 需保证 `ollama serve` 已启动且模型已 pull，否则只会增加失败重试耗时。
+    # fallback-providers: [ollama, zhipuai]
+    fallback-providers: []
+    routes:
+      router:
+        provider: openai
+        model: deepseek-flash
+        temperature: 0.0
+      planner:
+        provider: openai
+        model: deepseek-flash
+        temperature: 0.2
+      executor:
+        provider: openai
+        model: deepseek-flash
+        temperature: 0.3
+        max-tokens: 4096
+      react:
+        provider: openai
+        model: deepseek-flash
+        temperature: 0.3
+      summary:
+        provider: openai
+        model: deepseek-flash
+        temperature: 0.2
+      rewriter:
+        provider: openai
+        model: deepseek-flash
+        temperature: 0.0
+
+  # ---------- 运行时 ----------
+  runtime:
+    request-timeout-ms: 900000      # 单次任务 wall-clock 预算（15 分钟）
+    max-concurrent-requests: 64     # 全局并发上限，超出快速拒绝
+    acquire-timeout-ms: 500
+    sse-timeout-ms: 1800000         # SSE 连接最长存活（30 分钟）
+    heartbeat-interval-ms: 15000
+
+  # ---------- 安全护栏 ----------
+  guard:
+    enabled: true
+    max-input-chars: 8000
+    block-on-injection: true
+    injection-threshold: 1.0
+    mask-pii: true
+    mask-phone: false               # 手机号常作为查询条件，默认不改写
+    scan-output: true
+
+  # ---------- 工具治理 ----------
+  tools:
+    allow: []                       # 空 = 不启用白名单
+    deny: []
+    max-result-chars: 12000         # 单次工具结果上限，防上下文被打爆
+    call-timeout-ms: 120000
+    max-identical-calls: 2          # 相同入参重复调用抑制阈值
+    audit: true
+
+  # ---------- 会话持久化 ----------
+  persistence:
+    enabled: true
+    # 默认嵌入式 H2 文件库，零外部依赖；生产改 PostgreSQL：
+    # url: jdbc:postgresql://127.0.0.1:5432/agent
+    # driver-class-name: org.postgresql.Driver
+    url: jdbc:h2:file:./data/agent;AUTO_SERVER=TRUE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+    table-prefix: agent_
+    history-turns: 20
+    max-turns-per-session: 200
+    max-sessions: 500
+
+  # ---------- 知识库 ----------
+  knowledge:
+    enabled: true
+    auto-index: true
+    locations:
+      - classpath:knowledge/**/*.md
+      - file:./knowledge/**/*.md
+    top-k: 4
+    chunk-size: 1200
+    vector-enabled: true            # 容器里存在 VectorStore Bean 时自动启用向量检索
+
+# 日志：DEBUG 会打印每个 token，仅排查问题时临时开启
+logging:
+  level:
+    org.springframework.ai: INFO
+    com.yt.agent: INFO

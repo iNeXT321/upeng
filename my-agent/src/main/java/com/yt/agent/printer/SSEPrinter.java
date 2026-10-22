@@ -95,6 +95,19 @@ public class SSEPrinter implements Printer {
                 case "agent_stream":
                     response.setResult((String) message);
                     break;
+                case "error":
+                    // 统一错误事件：前端据此结束 loading 并展示原因，而不是一直等到超时
+                    if (message instanceof Map) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> errorMap = (Map<String, Object>) message;
+                        response.setResultMap(errorMap);
+                        Object msg = errorMap.get("message");
+                        response.setResult(msg == null ? "执行失败" : msg.toString());
+                    } else {
+                        response.setResult(String.valueOf(message));
+                    }
+                    response.setFinish(true);
+                    break;
                 case "result":
                     if (message instanceof String) {
                         response.setResult((String) message);

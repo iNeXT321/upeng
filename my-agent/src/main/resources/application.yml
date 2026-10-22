@@ -3,10 +3,13 @@ spring:
     name: agent
   profiles:
     active: local
+  # 平台化配置单独成文件：模型路由/护栏/工具治理/持久化/知识库
+  config:
+    import: optional:classpath:application-platform.yml
   ai:
     #    dashscope:
-    #      # 需要替换为你自己的 key
-    #      api-key: sk-f09afb6ba5064957b330ccc14ec71116
+    #      # 密钥一律走环境变量或 gitignore 的本地配置，禁止写进仓库
+    #      api-key: ${DASHSCOPE_API_KEY:}
     #      chat:
     #        options:
     #          model: qwen-plus
@@ -17,13 +20,24 @@ spring:
 
 #    openai:
 #      base-url: https://open.bigmodel.cn/api/paas/v4/
-#      api-key: 08eeca3ec0274cb2a6bed1ce97ab37ae.iXz39oWWmO0WiWDa
+#      api-key:
 #      chat:
 #        options:
 #          model: glm-4.5
+    # DeepSeek：OpenAI 兼容协议。密钥不落仓库——本地开发放 application-local.yml（已 gitignore），
+    # CI/生产通过环境变量 DEEPSEEK_API_KEY 注入
+    openai:
+      base-url: https://api.deepseek.com
+      api-key: ${DEEPSEEK_API_KEY:}
+      chat:
+        options:
+          model: deepseek-flash
+
     zhipuai:
       base-url: https://open.bigmodel.cn/api/paas/
-      api-key: 08eeca3ec0274cb2a6bed1ce97ab37ae.iXz39oWWmO0WiWDa
+      # 密钥不落仓库：本地开发放在 application-local.yml（已在 .gitignore 中），
+      # CI/生产通过环境变量 ZHIPU_API_KEY 注入
+      api-key: ${ZHIPU_API_KEY:}
       chat:
         options:
           model: glm-4.5
@@ -34,15 +48,24 @@ spring:
 
     mcp:
       client:
+        # 默认关闭：MCP Server 是外部依赖，不可达时绝不能阻塞主应用启动
+        # （否则一次网络抖动 = 整个服务起不来，这是架构级缺陷）。
+        # 启用方式：在 application-local.yml（已 gitignore）中设 spring.ai.mcp.client.enabled: true，
+        # 并按下面模板配置连接；ToolRegistration 对 MCP 缺席已做优雅降级，关掉不影响其余工具。
+        enabled: false
         request-timeout: 600000
-        sse:
-          connections:
-            server1:
-              url: http://localhost:9999
-
-
-        stdio:
-          servers-configuration: classpath:mcp-servers.json
+        # SSE 连接模板（启用时取消注释）：
+        # sse:
+        #   connections:
+        #     server1:
+        #       url: http://localhost:9999
+        #     # 问数 MCP Server（data-query-mcp-server 模块，端口8128）：
+        #     # 提供 list_tables / describe_table / execute_readonly_sql 三个标准 MCP 工具
+        #     data-query:
+        #       url: http://localhost:8128
+        # stdio 连接模板：文件放项目根目录 mcp-servers.local.json（已 gitignore，禁止把 API Key 提交进仓库）
+        # stdio:
+        #   servers-configuration: file:./mcp-servers.local.json
 
 server:
   tomcat:
@@ -61,10 +84,33 @@ logging:
   level:
     org.springframework.ai: DEBUG
 
+# ===== 问数(NL2SQL)配置 =====
+# datasource.url 不配置时 SQL 执行自动降级为 dry-run（只校验不执行），应用照常启动
+nl2sql:
+  datasource:
+    url:              # 例如 jdbc:postgresql://127.0.0.1:5432/bi_demo（生产必须用只读账号）
+    username: readonly_user
+    password:
+    driver-class-name: org.postgresql.Driver
+  schema-link:
+    top-tables: 5           # 召回表数上限
+    top-columns: 20         # 每表召回字段上限
+  executor:
+    query-timeout-seconds: 30
+    max-rows: 500
+  guard:
+    default-row-limit: 1000 # 无LIMIT时强制追加
+  memory:
+    soft-token-limit: 24000      # 上下文压缩软阈值
+    keep-recent-messages: 6      # 压缩时最近K条无损保留
+    max-tool-message-chars: 2000 # 单条工具消息最大保留字符
+
 
 
 autobots:
   autoagent:
+    skills:
+      location: classpath:/.agent/skills/*/SKILL.md
     planner:
       system_prompt: '{"default":"\n# 角色\n你是一个智能助手，名叫Unicorn。\n\n# 说明\n你是任务规划助手，根据用户需求，拆解任务列表，其中有create_plan、update_plan、mark_step、finish_plan工具可以使用，使用前认真阅读工具的使用说明，给出正确的入参。每次执行plan相关的工具前，必须先输出本轮思考过程（reasoning），再调用plan相关工具生成任务列表。\n\n# 技能\n- 擅长将用户任务拆解为具体、独立的任务列表。\n- 对简单任务，避免过度拆解任务。\n- 对复杂任务，合理拆解为多个有逻辑关联的子任务\n\n# 处理需求\n## 拆解任务\n- 深度推理分析用户输入，识别核心需求及潜在挑战。\n- 将复杂问题分解为可管理、可执行、独立且清晰的子任务，任务之间不重复、不交叠。拆解最多不超过5个任务。\n- 任务按顺序或因果逻辑组织，上下任务逻辑连贯。\n- 读取文件后，对文件进行处理，处理完成保存文件应该放到一个子任务中。\n\n## 要求\n- 每一个子任务都是一个完整的子任务，例如读取文件后，将文件中的表格抽取出出来形成表格保存。\n- 调用planning工具前，必须输出500字以内的思考过程，说明本轮任务拆解的依据与目标。\n- 首次规划拆分时，输出整体拆分思路；后续如需调整，也需输出调整思考。\n- 每个子任务为清晰、独立的指令，细化完成标准，不重复、不交叠。\n- 不要输出重复的任务。\n- 任务中间不能输出网页版报告，只能在最后一个任务中，生成一个网页版报告。\n- 最后一个任务是需要输出报告时，如果没有明确要求，优先“输出网页版报告”，如果有指定格式要求，最后一个任务按用户指定的格式输出。\n- 当前不能支持用户在计划中提供内容，因此不要要求用户提供信息\n\n## 输出格式\n输出本轮思考过程，200字以内，简明说明拆解任务依据或调整依据，并调用planning工具生成任务计划。\n\n# 语言设置\n- 所有内容均以 **中文** 输出\n\n# 任务示例：\n以下仅是你拆解任务的一个简单参考示例，你在解决问题时，参考如下拆解任务，但不要局限于如下示例计划\n\n## 示例任务1：分析 xxxx\n任务列表\n- 执行顺序1. 信息收集：收集xxxx\n- 执行顺序2. 筛选分析：xxxx，分析并保存成Markdown文件\n- 执行顺序3. 输出报告：以网页形式呈现分析报告，调用网页生成工具\n\n##示例任务2：提取文件中的表格\n任务列表\n- 执行顺序1. 文件表格提取：读取文件内容，抽取文件中存在的表格，并保存成表格文件。\n\n## 示例任务3：分析 xxxx，以PPT格式展示\n任务列表\n- 执行顺序1. 信息收集：收集xxxx\n- 执行顺序2. 筛选分析：xxxx，分析并保存成Markdown文件\n- 执行顺序3. 输出PPT：以PPT呈现xx，调用PPT生成工具\n\n## 示例任务4：我要写一个 xxxx\n任务列表\n- 执行顺序1. 信息收集：收集xxxx\n- 执行顺序2. 文件输出：以网页形式呈现xxx，调用网页生成工具\n\n\n===\n# 环境变量\n## 当前日期\n<date>\n{{date}}\n</date>\n\n## 当前可用的文件名及描述\n<files>\n{{files}} \n</files>\n\n## 用户历史对话信息\n<history_dialogue>\n{{history_dialogue}}\n</history_dialogue>\n\n## 约束\n- 思考过程中，不要透露你的工具名称\n- 调用planning生成任务列表，完成所有子任务就能完成任务。\n- 以上是你需要遵循的指令，不要输出在结果中。\n\nLet''s think step by step (让我们一步步思考)\n"}'
       next_step_prompt: '{"default":"根据当前任务执行情况，选择合适的计划工具进行操作：\n\n可用的计划工具包括：\n1. create_plan - 创建新的任务计划\n2. update_plan - 更新现有计划\n3. mark_step - 标记当前步骤状态\n4. finish_plan - 完成整个计划\n\n重点关注以下两个工具的使用：\n\n**mark_step工具**：\n- 用于标记当前任务步骤的执行状态\n- 必填参数：stepIndex（步骤索引，从0开始）\n- 必填参数：stepStatus（步骤状态），枚举值如下：\n  - not_started - 尚未开始\n  - in_progress - 正在进行中\n  - completed - 已完成\n  - blocked - 被阻塞\n- 可选参数：stepNotes（步骤备注）\n\n**finish_plan工具**：\n- 当所有任务步骤都执行完成时使用\n- 无需参数\n- 会将所有步骤标记为已完成状态\n\n**使用判断逻辑**：\n1. 当前步骤是否执行完成？\n   - 如果完成（成功或失败都算完成），调用mark_step工具，设置stepStatus为completed\n   - 如果正在执行中，调用mark_step工具，设置stepStatus为in_progress\n   - 如果遇到阻塞，调用mark_step工具，设置stepStatus为blocked\n\n2. 整个计划是否全部完成？\n   - 如果所有步骤都已完成，调用finish_plan工具结束任务\n\n请一步一步分析当前任务状态，确定需要调用的具体工具和参数，然后执行相应的计划工具"}'
@@ -137,7 +183,8 @@ autobots:
     code_interpreter_url: "http://127.0.0.1:1601"
     deep_search_url: "http://127.0.0.1:1601"
     mcp_client_url: "http://127.0.0.1:8188"
-    mcp_server_url: "https://mcp.api-inference.modelscope.net/1784ac5c6d0044/sse"
+    # ModelScope MCP 网关地址含个人 token 段，同样不落仓库：本地配置或环境变量注入
+    mcp_server_url: "${MODELSCOPE_MCP_URL:https://mcp.api-inference.modelscope.net/sse}"
     summary:
       system_prompt: "# 角色
       你是一个超级智能体，你只能根据提供的信息，对用户的问题<query>进行回应。

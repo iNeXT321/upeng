@@ -67,10 +67,11 @@
         <!--            <groupId>org.springframework.ai</groupId>-->
         <!--            <artifactId>spring-ai-openai-spring-boot-starter</artifactId>-->
         <!--        </dependency>-->
-<!--        <dependency>-->
-<!--            <groupId>org.springframework.ai</groupId>-->
-<!--            <artifactId>spring-ai-starter-model-openai</artifactId>-->
-<!--        </dependency>-->
+        <!-- DeepSeek 等走 OpenAI 兼容协议的模型供应商 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-openai</artifactId>
+        </dependency>
 
         <!-- https://docs.spring.io/spring-ai/reference/api/chat/ollama-chat.html -->
         <dependency>
@@ -181,7 +182,19 @@
             <artifactId>spring-ai-starter-model-zhipuai</artifactId>
         </dependency>
 
-
+        <!-- ===== 平台化能力依赖 ===== -->
+        <!-- 指标：不引入 actuator，仅用 micrometer 核心，可通过 /ai/stats 输出，后续可替换为 Prometheus Registry -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-core</artifactId>
+        </dependency>
+        <!-- 会话持久化默认嵌入式实现：零外部依赖即可落盘；生产切换 PostgreSQL 只需改 agent.persistence.url -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>2.2.224</version>
+            <scope>runtime</scope>
+        </dependency>
 
     </dependencies>
 

@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 /**
  * 记忆类 - 管理代理的消息历史
@@ -18,10 +19,20 @@ public class Memory {
     private List<Message> messages = new ArrayList<>();
 
     /**
+     * 追加监听器：消息进入 Memory 时同步推送到请求级流水（用于落库）。
+     *
+     * <p>为什么挂在 Memory 上而不是让各 Agent 手动上报：Agent 内部大量直接调用
+     * {@code getMemory().addMessage(...)}（think/act/工具回包），逐个改造既易漏又侵入业务逻辑。
+     * 在唯一的写入口做拦截，是保证"不丢消息"的最稳妥做法。</p>
+     */
+    private transient Consumer<Message> appendListener;
+
+    /**
      * 添加消息
      */
     public void addMessage(Message message) {
         messages.add(message);
+        fire(message);
     }
 
     /**
@@ -29,6 +40,20 @@ public class Memory {
      */
     public void addMessages(List<Message> newMessages) {
         messages.addAll(newMessages);
+        if (newMessages != null) {
+            newMessages.forEach(this::fire);
+        }
+    }
+
+    private void fire(Message message) {
+        Consumer<Message> listener = this.appendListener;
+        if (listener != null && message != null) {
+            try {
+                listener.accept(message);
+            } catch (Exception ignored) {
+                // 监听器异常绝不能影响推理主链路
+            }
+        }
     }
 
     /**

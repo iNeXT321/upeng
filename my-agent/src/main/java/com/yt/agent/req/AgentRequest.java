@@ -17,6 +17,11 @@ import java.util.List;
 public class AgentRequest {
     private String requestId;
     private String erp;
+    /**
+     * 会话 ID：多轮对话的唯一依据。为空表示单轮（无历史回放）。
+     * 前端应在同一会话内保持不变，这样服务端才能回放历史、复用口径。
+     */
+    private String sessionId;
     private String query;
     private Integer agentType;
     private String basePrompt;

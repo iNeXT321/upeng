@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: data-query-mcp-server
+  ai:
+    mcp:
+      server:
+        name: data-query-mcp
+        version: 1.0.0
+        type: SYNC
+        # SSE 传输端点（客户端通过 http://localhost:8128/sse 接入）
+        sse-endpoint: /sse
+        sse-message-endpoint: /mcp/message
+
+server:
+  port: 8128
+
+# 问数数据源配置。不配置时 execute_readonly_sql 自动降级为 dry-run（只校验不执行），
+# 便于在没有数据库的环境下演示与联调。生产环境必须配置为【只读账号】。
+dataquery:
+  datasource:
+    url:            # 例如 jdbc:postgresql://127.0.0.1:5432/bi_demo
+    username: readonly_user
+    password:
+  executor:
+    query-timeout-seconds: 30
+    max-rows: 500
+  guard:
+    default-row-limit: 1000
+
+logging:
+  level:
+    com.yt.dataquery: INFO

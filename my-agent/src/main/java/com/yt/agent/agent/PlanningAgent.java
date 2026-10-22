@@ -91,7 +91,10 @@ public class PlanningAgent extends ReActAgent {
 //             //   .replace("{{date}}", context.getDateInfo())
 //                .replace("{{sopPrompt}}", context.getSopPrompt()));
 
-        setSystemPrompt(PlanningPrompt.PPT_SYSTEM_PROMPT);
+        setSystemPrompt(agentConfig.getPlannerSystemPromptMap().getOrDefault(promptKey, PlanningPrompt.PPT_SYSTEM_PROMPT)
+                .replace("{{tools}}", toolPrompt.toString())
+                .replace("{{query}}", context.getQuery())
+                .replace("{{sopPrompt}}", context.getSopPrompt()));
         setNextStepPrompt(agentConfig.getPlannerNextStepPromptMap().getOrDefault(nextPromptKey, PlanningPrompt.NEXT_STEP_PROMPT)
                 .replace("{{tools}}", toolPrompt.toString())
                 .replace("{{query}}", context.getQuery())
@@ -174,13 +177,21 @@ public class PlanningAgent extends ReActAgent {
             getMemory().addMessage(assistantMessage);
 
         } catch (Exception e) {
+            // 原实现只打日志并返回 true，随后 act() 会拿着 null 的 toolCallChatResponse 触发 NPE，
+            // 表现为"规划阶段莫名失败且没有可读原因"。这里显式终止并保留错误信息。
             log.error("{} think error ", context.getRequestId(), e);
+            setState(AgentState.ERROR);
+            return false;
         }
         return true;
     }
 
     @Override
     public String act() {
+        if (toolCallChatResponse == null) {
+            setState(AgentState.ERROR);
+            return "规划失败：未获得模型响应";
+        }
         // 关闭了动态更新Plan，直接执行下一个task
         if (isCloseUpdate) {
             if (Objects.nonNull(planningTool.getPlan())) {
@@ -197,7 +208,7 @@ public class PlanningAgent extends ReActAgent {
         for (ToolResponseMessage.ToolResponse toolResponse : toolResponseMessage.getResponses()) {
             String result = toolResponse.responseData();
             if (maxObserve != null) {
-                result = result.substring(0, Math.min(result.length(), maxObserve));
+                result = com.yt.agent.utils.StringUtil.truncateSafely(result, maxObserve);
             }
             results.add(result);
 

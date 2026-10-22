@@ -6,8 +6,10 @@ import com.alibaba.fastjson.JSON;
 import com.yt.agent.agent.enums.AgentState;
 import com.yt.agent.agent.prompt.ToolCallPrompt;
 import com.yt.agent.config.AgentConfig;
+import com.yt.agent.platform.llm.ModelRole;
 import com.yt.agent.response.AgentResponse;
 import com.yt.agent.utils.SpringContextHolder;
+import com.yt.agent.utils.StringUtil;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.extern.slf4j.Slf4j;
@@ -58,7 +60,8 @@ public class ReActImpAgent extends ReActAgent {
         setDescription("an agent that can execute tool calls.");
 
         setContext(context);
-        setChatClient(context.getChatClient());
+        // 按角色取模型：REACT 角色可以独立于 planner/executor 配置不同模型
+        setChatClient(context.getLlm() != null ? context.getLlm().chat(ModelRole.REACT) : context.getChatClient());
 
         StringBuilder toolPrompt = new StringBuilder();
         ToolCallback[] availableToolList = context.getAvailableTools();
@@ -71,12 +74,18 @@ public class ReActImpAgent extends ReActAgent {
         String nextPromptKey = "default";
         ApplicationContext applicationContext = SpringContextHolder.getApplicationContext();
         AgentConfig agentConfig = applicationContext.getBean(AgentConfig.class);
-        setSystemPrompt(agentConfig.getReactSystemPromptMap().getOrDefault(promptKey, ToolCallPrompt.SYSTEM_PROMPT)
+        String resolvedSystemPrompt = agentConfig.getReactSystemPromptMap().getOrDefault(promptKey, ToolCallPrompt.SYSTEM_PROMPT)
                 .replace("{{tools}}", toolPrompt.toString())
                 .replace("{{query}}", context.getQuery())
 
                // .replace("{{date}}", context.getDateInfo())
-                .replace("{{basePrompt}}", context.getBasePrompt()));
+                .replace("{{basePrompt}}", context.getBasePrompt());
+
+        // 注入语义记忆（指标口径/业务术语/用户偏好）：问数正确性的锚点，优先级高于模型常识推断
+        if (context.getSemanticMemoryPrompt() != null && !context.getSemanticMemoryPrompt().isBlank()) {
+            resolvedSystemPrompt = resolvedSystemPrompt + "\n" + context.getSemanticMemoryPrompt();
+        }
+        setSystemPrompt(resolvedSystemPrompt);
 
         setNextStepPrompt(agentConfig.getReactNextStepPromptMap().getOrDefault(nextPromptKey, ToolCallPrompt.NEXT_STEP_PROMPT)
                 .replace("{{tools}}", toolPrompt.toString())
@@ -93,9 +102,10 @@ public class ReActImpAgent extends ReActAgent {
         this.availableTools = context.getAvailableTools();
         this.toolCallingManager = ToolCallingManager.builder().build();
 
-        this.chatOptions = ToolCallingChatOptions.builder()
-                .internalToolExecutionEnabled(false)
-                .build();
+        // 统一由模型网关产出选项：保证"路由到哪个模型就请求哪个模型"，并关闭内置工具执行
+        this.chatOptions = context.getLlm() != null
+                ? context.getLlm().toolOptions(ModelRole.REACT)
+                : ToolCallingChatOptions.builder().internalToolExecutionEnabled(false).build();
 
     }
 
@@ -108,6 +118,18 @@ public class ReActImpAgent extends ReActAgent {
             getMemory().addMessage(userMessage);
         }
         // 2、调用 AI 大模型，获取工具调用结果
+        // 上下文压缩：token 超过软阈值时折叠旧步骤摘要化，防止长任务撑爆上下文窗口
+        try {
+            com.yt.agent.memory.ContextCompressor compressor =
+                    SpringContextHolder.getApplicationContext().getBean(com.yt.agent.memory.ContextCompressor.class);
+            List<Message> compressed = compressor.compressIfNeeded(getMemory().getMessages());
+            if (compressed != getMemory().getMessages()) {
+                getMemory().getMessages().clear();
+                getMemory().addMessages(compressed);
+            }
+        } catch (Exception e) {
+            log.warn("上下文压缩跳过: {}", e.getMessage());
+        }
         Prompt prompt = new Prompt( getMemory().getMessages(), this.chatOptions);
         try{
             // 获取带工具选项的响应
@@ -177,7 +199,7 @@ public class ReActImpAgent extends ReActAgent {
                     .build(), null);
 
             if (maxObserve != null) {
-                result = result.substring(0, Math.min(result.length(), maxObserve));
+                result = StringUtil.truncateSafely(result, maxObserve);
             }
             results.add(result);
 

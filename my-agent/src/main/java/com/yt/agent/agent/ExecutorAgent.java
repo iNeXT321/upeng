@@ -6,6 +6,7 @@ import com.yt.agent.agent.enums.AgentState;
 import com.yt.agent.agent.prompt.ExecutorPrompt;
 import com.yt.agent.agent.prompt.ToolCallPrompt;
 import com.yt.agent.config.AgentConfig;
+import com.yt.agent.platform.llm.ModelRole;
 import com.yt.agent.response.AgentResponse;
 import com.yt.agent.utils.MessageUtils;
 import com.yt.agent.utils.SpringContextHolder;
@@ -79,7 +80,12 @@ public class ExecutorAgent extends ReActAgent {
 //                .replace("{{sopPrompt}}", context.getSopPrompt())
 //                .replace("{{executorSopPrompt}}", agentConfig.getExecutorSopPromptMap().getOrDefault(sopPromptKey, "")));
 
-        setSystemPrompt(ExecutorPrompt.PPT_SYSTEM_PROMPT);
+        // 注入语义记忆（指标口径/业务术语/用户偏好）：问数正确性的锚点
+        String executorSystemPrompt = ExecutorPrompt.PPT_SYSTEM_PROMPT;
+        if (context.getSemanticMemoryPrompt() != null && !context.getSemanticMemoryPrompt().isBlank()) {
+            executorSystemPrompt = executorSystemPrompt + "\n" + context.getSemanticMemoryPrompt();
+        }
+        setSystemPrompt(executorSystemPrompt);
 
         setNextStepPrompt(agentConfig.getExecutorNextStepPromptMap().getOrDefault(nextPromptKey, ToolCallPrompt.NEXT_STEP_PROMPT)
                 .replace("{{tools}}", toolPrompt.toString())
@@ -93,12 +99,13 @@ public class ExecutorAgent extends ReActAgent {
 
         setPrinter(context.printer);
 
-        setMaxSteps(agentConfig.getPlannerMaxSteps());
+        // 修复：原实现误用 plannerMaxSteps，导致执行阶段的步数配置（executor.max_steps）完全不生效
+        setMaxSteps(agentConfig.getExecutorMaxSteps());
 
         this.toolCallingManager = ToolCallingManager.builder().build();
-        this.chatOptions = ToolCallingChatOptions.builder()
-                .internalToolExecutionEnabled(false)
-                .build();
+        this.chatOptions = context.getLlm() != null
+                ? context.getLlm().toolOptions(ModelRole.EXECUTOR)
+                : ToolCallingChatOptions.builder().internalToolExecutionEnabled(false).build();
         setContext(context);
 
         setMaxObserve(Integer.parseInt(agentConfig.getMaxObserve()));
