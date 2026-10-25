@@ -1,12 +1,28 @@
 spring:
   application:
     name: agent
+  # 智谱 starter 的自动装配在无 Key 时直接抛异常，本部署默认走 DeepSeek，按需排除；
+  # 需要启用智谱时删除本 exclude 并配置 ZHIPU_API_KEY
+  autoconfigure:
+    exclude:
+      - org.springframework.ai.model.zhipuai.autoconfigure.ZhiPuAiChatAutoConfiguration
+      - org.springframework.ai.model.zhipuai.autoconfigure.ZhiPuAiEmbeddingAutoConfiguration
+      - org.springframework.ai.model.zhipuai.autoconfigure.ZhiPuAiImageAutoConfiguration
   profiles:
     active: local
   # 平台化配置单独成文件：模型路由/护栏/工具治理/持久化/知识库
   config:
     import: optional:classpath:application-platform.yml
   ai:
+    # 显式关闭用不到的 OpenAI 模型族。starter 的 autoconfigure 缺省即启用（havingValue=openai
+    # 且 matchIfMissing），不关的话这些 bean 也会要求 spring.ai.openai.api-key，一旦环境变量
+    # 没导出，整个应用直接起不来（2026-10-24 启动失败 trace 的根因）。chat 保留（DeepSeek 走它）。
+    model:
+      audio:
+        speech: none
+        transcription: none
+      image: none
+      moderation: none
     #    dashscope:
     #      # 密钥一律走环境变量或 gitignore 的本地配置，禁止写进仓库
     #      api-key: ${DASHSCOPE_API_KEY:}
@@ -31,7 +47,7 @@ spring:
       api-key: ${DEEPSEEK_API_KEY:}
       chat:
         options:
-          model: deepseek-flash
+          model: deepseek-chat
 
     zhipuai:
       base-url: https://open.bigmodel.cn/api/paas/
@@ -85,16 +101,36 @@ logging:
     org.springframework.ai: DEBUG
 
 # ===== 问数(NL2SQL)配置 =====
-# datasource.url 不配置时 SQL 执行自动降级为 dry-run（只校验不执行），应用照常启动
+# 数据源：本地 docker MySQL 数仓（bi_warehouse，建表脚本见 deploy/infra/mysql/init）
+# nl2sql_ro 为只读账号（见 03_grants.sql），纵深防御最后一层
 nl2sql:
   datasource:
-    url:              # 例如 jdbc:postgresql://127.0.0.1:5432/bi_demo（生产必须用只读账号）
-    username: readonly_user
-    password:
-    driver-class-name: org.postgresql.Driver
+    # 容器内走服务名 mysql；本机开发可用 NL2SQL_DB_URL 覆盖
+    url: ${NL2SQL_DB_URL:jdbc:mysql://127.0.0.1:3306/bi_warehouse?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&connectTimeout=5000&socketTimeout=60000}
+    username: ${NL2SQL_DB_USER:nl2sql_ro}
+    password: ${NL2SQL_DB_PASSWORD:nl2sql_ro_2026}
+    driver-class-name: com.mysql.cj.jdbc.Driver
   schema-link:
     top-tables: 5           # 召回表数上限
     top-columns: 20         # 每表召回字段上限
+  # schema 混合召回：ES(BM25 关键词) + Milvus(语义向量) 双通道 + RRF 融合
+  # 任一外部依赖不可用时自动降级为纯规则召回，不影响问数主流程
+  hybrid:
+    enabled: ${NL2SQL_HYBRID_ENABLED:true}
+    es:
+      base-url: ${NL2SQL_ES_BASE_URL:http://127.0.0.1:9200}
+      index: nl2sql_schema
+    milvus:
+      host: ${NL2SQL_MILVUS_HOST:127.0.0.1}
+      port: ${NL2SQL_MILVUS_PORT:19530}
+      collection: nl2sql_schema
+    # embedding 走 OpenAI 兼容协议：默认本地 Ollama(nomic-embed-text, 768维)，
+    # 可切换硅基流动 bge-m3 等云 API（改 base-url/model/api-key/dim 即可）
+    embedding:
+      base-url: ${NL2SQL_EMBEDDING_BASE_URL:http://127.0.0.1:11434/v1}
+      model: ${NL2SQL_EMBEDDING_MODEL:nomic-embed-text}
+      api-key: ${NL2SQL_EMBEDDING_API_KEY:}
+      dim: ${NL2SQL_EMBEDDING_DIM:768}
   executor:
     query-timeout-seconds: 30
     max-rows: 500

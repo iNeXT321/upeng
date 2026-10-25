@@ -25,9 +25,9 @@ class SkillsToolTest {
     }
 
     @Test
-    @DisplayName("发现阶段：应扫描到 research-report 技能并正确解析 frontmatter")
+    @DisplayName("发现阶段：应扫描到 research-report 与 text2sql-analyst 技能并正确解析 frontmatter")
     void shouldDiscoverSkillFromClasspath() {
-        assertEquals(1, skillsTool.getSkillRegistry().size(), "应发现 1 个技能");
+        assertEquals(2, skillsTool.getSkillRegistry().size(), "应发现 2 个技能");
 
         SkillsTool.Skill skill = skillsTool.getSkillRegistry().get("research-report");
         assertNotNull(skill, "research-report 技能应被注册");
@@ -105,7 +105,7 @@ class SkillsToolTest {
     void shouldFallbackToDefaultLocationWhenBlank() {
         SkillsTool tool = new SkillsTool("   ");
         assertEquals(SkillsTool.DEFAULT_SKILLS_LOCATION, tool.getSkillsLocation());
-        assertEquals(1, tool.getSkillRegistry().size(), "回退默认路径后应能扫到技能");
+        assertEquals(2, tool.getSkillRegistry().size(), "回退默认路径后应能扫到技能");
     }
 
     @Test
