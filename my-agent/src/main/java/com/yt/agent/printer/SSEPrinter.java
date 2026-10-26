@@ -64,6 +64,9 @@ public class SSEPrinter implements Printer {
                 case "tool_thought":
                     response.setToolThought((String) message);
                     break;
+                case "tool_call":
+                    response.setToolCall((AgentResponse.ToolCall) message);
+                    break;
                 case "task":
                     response.setTask(((String) message).replaceAll("^执行顺序(\\d+)\\.\\s?", ""));
                     break;

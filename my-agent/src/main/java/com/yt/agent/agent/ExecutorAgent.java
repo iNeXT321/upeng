@@ -175,6 +175,16 @@ public class ExecutorAgent extends ReActAgent {
                     printer.send("tool_thought", result);
                 }
             }
+            // 推送工具调用意图（先于执行）：前端据此展示"调用了什么工具、传了什么参数"，
+            // SQL / 检索关键词等关键信息都在参数里，是用户排查问数正确性的第一现场
+            if (chatResponse.hasToolCalls()) {
+                for (AssistantMessage.ToolCall toolCall : toolCallList) {
+                    printer.send("tool_call", AgentResponse.ToolCall.builder()
+                            .toolName(toolCall.name())
+                            .toolParam(parseToolParam(toolCall.arguments()))
+                            .build(), null);
+                }
+            }
             //将消息存入到Memory中
             getMemory().addMessage(assistantMessage);
 
@@ -208,16 +218,25 @@ public class ExecutorAgent extends ReActAgent {
         ToolExecutionResult toolExecutionResult = toolCallingManager.executeToolCalls(prompt, toolCallChatResponse);
         ToolResponseMessage toolResponseMessage = (ToolResponseMessage) CollUtil.getLast(toolExecutionResult.conversationHistory());
 
+        // id -> 调用参数 映射：把模型传入的参数回填到 tool_result，前端才能展示"用什么参数调的"
+        Map<String, AssistantMessage.ToolCall> callById = new HashMap<>();
+        if (toolCallChatResponse != null) {
+            for (AssistantMessage.ToolCall call : toolCallChatResponse.getResult().getOutput().getToolCalls()) {
+                callById.put(call.id(), call);
+            }
+        }
+
         List<String> results = new ArrayList<>();
         for (ToolResponseMessage.ToolResponse toolResponse : toolResponseMessage.getResponses()) {
             String result = toolResponse.responseData();
             String toolName = toolResponse.name();
 
             if (!Arrays.asList("report_tool").contains(toolName)) {
+                AssistantMessage.ToolCall call = callById.get(toolResponse.id());
                 printer.send("tool_result", AgentResponse.ToolResult.builder()
                         .toolName(toolName)
-                        // .toolParam(JSON.parseObject(command.getFunction().getArguments(), Map.class))
-                        .toolResult(result)
+                        .toolParam(call != null ? parseToolParam(call.arguments()) : null)
+                        .toolResult(truncateForSse(result))
                         .build(),
                         null);
             }
@@ -249,5 +268,29 @@ public class ExecutorAgent extends ReActAgent {
         return super.run(request);
     }
 
+    /** SSE 通道中工具结果的最大长度：完整结果喂给模型，展示侧截断防止前端渲染卡顿 */
+    private static final int MAX_SSE_TOOL_RESULT = 6000;
+
+    private String truncateForSse(String result) {
+        if (result == null || result.length() <= MAX_SSE_TOOL_RESULT) {
+            return result;
+        }
+        return result.substring(0, MAX_SSE_TOOL_RESULT)
+                + "\n…（结果过长已截断，共 " + result.length() + " 字符，完整结果见服务端日志）";
+    }
+
+    /** 模型给出的工具参数是 JSON 字符串，解析失败时降级为原始串，绝不因参数格式问题中断主流程 */
+    private Map<String, Object> parseToolParam(String arguments) {
+        if (StringUtils.isEmpty(arguments)) {
+            return new HashMap<>();
+        }
+        try {
+            return JSON.parseObject(arguments);
+        } catch (Exception e) {
+            Map<String, Object> fallback = new HashMap<>();
+            fallback.put("_raw", arguments);
+            return fallback;
+        }
+    }
 
 }

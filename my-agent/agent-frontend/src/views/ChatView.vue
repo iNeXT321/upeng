@@ -41,12 +41,43 @@
           <!-- 过程步骤（思考/工具调用），完成后可折叠 -->
           <el-collapse v-if="msg.steps.length" class="msg-steps"
                        :model-value="msg.status === 'streaming' ? ['steps'] : []">
-            <el-collapse-item :title="`执行过程（${msg.steps.length}）`" name="steps">
-              <div v-for="(s, i) in msg.steps" :key="i" class="step-item">
-                <el-icon class="step-icon"><Loading v-if="msg.status === 'streaming' && i === msg.steps.length - 1" />
-                  <CircleCheck v-else /></el-icon>
-                <span>{{ s.text }}</span>
-              </div>
+            <el-collapse-item :title="stepsTitle(msg)" name="steps">
+              <template v-for="(s, i) in msg.steps" :key="i">
+                <!-- 工具步骤：工具名 + 状态 + 耗时 + 可展开的参数/结果 -->
+                <div v-if="s.kind === 'tool'" class="step-item tool-step">
+                  <el-icon class="step-icon" :class="{ spin: stepRunning(msg, s, i) }">
+                    <Loading v-if="stepRunning(msg, s, i)" />
+                    <CircleCheck v-else />
+                  </el-icon>
+                  <div class="step-body">
+                    <div class="tool-head">
+                      <el-tag size="small" effect="plain" class="tool-tag">
+                        <el-icon :size="12" style="vertical-align: -2px"><SetUp /></el-icon>
+                        {{ s.toolName }}
+                      </el-tag>
+                      <span class="tool-status" :class="{ running: stepRunning(msg, s, i) }">
+                        {{ toolStatusText(msg, s, i) }}
+                      </span>
+                    </div>
+                    <details v-if="s.toolParam && Object.keys(s.toolParam).length" class="tool-detail">
+                      <summary>调用参数</summary>
+                      <pre class="tool-code">{{ formatParam(s.toolParam) }}</pre>
+                    </details>
+                    <details v-if="s.toolResult" class="tool-detail">
+                      <summary>执行结果 · {{ s.toolResult.length }} 字符 · {{ preview(s.toolResult) }}</summary>
+                      <pre class="tool-code">{{ s.toolResult }}</pre>
+                    </details>
+                  </div>
+                </div>
+                <!-- 思考/规划步骤：markdown 渲染 -->
+                <div v-else class="step-item">
+                  <el-icon class="step-icon" :class="{ spin: stepRunning(msg, s, i) }">
+                    <Loading v-if="stepRunning(msg, s, i)" />
+                    <CircleCheck v-else />
+                  </el-icon>
+                  <div class="step-text markdown" v-html="renderMd(s.text)" />
+                </div>
+              </template>
             </el-collapse-item>
           </el-collapse>
           <!-- 正文（Markdown 渲染）+ 流式打字光标 -->
@@ -107,6 +138,42 @@ const messagesEl = ref(null)
 
 const currentAgentLabel = computed(
   () => agentTypes.find(t => t.value === chat.agentType)?.label || '')
+
+/** 步骤是否仍在执行：工具步骤看自身状态，思考步骤看"是否为流式中的最后一步" */
+function stepRunning(msg, s, i) {
+  if (s.kind === 'tool') return s.status === 'running'
+  return msg.status === 'streaming' && i === msg.steps.length - 1
+}
+
+function toolStatusText(msg, s, i) {
+  if (stepRunning(msg, s, i)) return '执行中…'
+  if (!s.toolResult) return '完成（无结果返回）'
+  return s.durationMs != null ? `完成 · ${fmtDur(s.durationMs)}` : '完成'
+}
+
+function fmtDur(ms) {
+  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`
+}
+
+function stepsTitle(msg) {
+  const running = msg.steps.some((s, idx) => stepRunning(msg, s, idx))
+  return running ? `执行过程（${msg.steps.length}）· 进行中…` : `执行过程（${msg.steps.length}）`
+}
+
+/** 参数对象格式化为可读 JSON（含 _raw 降级字段时还原原始串） */
+function formatParam(param) {
+  try {
+    return JSON.stringify(param, null, 2)
+  } catch {
+    return String(param)
+  }
+}
+
+/** 结果摘要：压成单行、截断到 80 字符，放在折叠条 summary 里当预览 */
+function preview(text) {
+  const oneLine = String(text).replace(/\s+/g, ' ').trim()
+  return oneLine.length > 80 ? oneLine.slice(0, 80) + '…' : oneLine
+}
 
 watch(() => chat.messages.length, scrollToBottom)
 watch(() => chat.messages[chat.messages.length - 1]?.content, scrollToBottom)
@@ -189,7 +256,29 @@ async function onFilePicked(uploadFile) {
   display: flex; gap: 6px; align-items: flex-start;
   font-size: 12px; color: #606266; padding: 3px 0; word-break: break-all;
 }
-.step-icon { margin-top: 2px; color: #409eff; }
+.step-icon { margin-top: 2px; color: #409eff; flex-shrink: 0; }
+.step-icon.spin { animation: step-spin 1s linear infinite; }
+@keyframes step-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.step-text { flex: 1; min-width: 0; }
+/* 工具步骤 */
+.tool-step { padding: 4px 0; }
+.step-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.tool-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tool-tag { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+.tool-status { color: #909399; }
+.tool-status.running { color: #409eff; }
+.tool-detail { font-size: 12px; }
+.tool-detail summary {
+  cursor: pointer; color: #909399; user-select: none; line-height: 1.6;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tool-detail summary:hover { color: #409eff; }
+.tool-code {
+  margin: 4px 0 0; padding: 8px 10px; max-height: 260px; overflow: auto;
+  background: #f6f8fa; border: 1px solid #e4e7ed; border-radius: 6px;
+  font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 12px;
+  line-height: 1.6; white-space: pre-wrap; word-break: break-all; color: #303133;
+}
 .typing { display: inline-flex; gap: 4px; padding: 4px 0; }
 .type-cursor {
   display: inline-block; width: 2px; height: 1em;

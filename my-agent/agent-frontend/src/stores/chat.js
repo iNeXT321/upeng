@@ -12,8 +12,8 @@ function uuid() {
  * 与后端的契约：
  *  - 同一会话内 sessionId 不变，后端据此回放历史（多轮连续对话的核心）；
  *  - requestId 每次请求新生成，是"停止生成"的定位键；
- *  - assistant 消息在流式过程中逐段拼接：tool_thought 进 steps（过程折叠展示），
- *    result 追加为正文。
+ *  - assistant 消息在流式过程中逐段拼接：tool_thought（思考）、tool_call（工具调用意图）、
+ *    tool_result（工具结果回填）、task（规划步骤）进 steps（过程折叠展示），result 追加为正文。
  */
 export const useChatStore = defineStore('chat', {
   state: () => ({
@@ -130,6 +130,10 @@ export const useChatStore = defineStore('chat', {
       aiMsg.content += aiMsg.pending
       aiMsg.pending = ''
       aiMsg.status = aiMsg.error ? 'error' : 'done'
+      // 停止/出错时收尾还在 running 的工具步骤，避免步骤区永远显示"执行中"
+      aiMsg.steps.forEach((s) => {
+        if (s.kind === 'tool' && s.status === 'running') s.status = 'done'
+      })
       if (!aiMsg.content && !aiMsg.steps.length && !aiMsg.error) {
         aiMsg.content = '（本次没有返回内容）'
       }
@@ -236,6 +240,43 @@ export const useChatStore = defineStore('chat', {
       if (type === 'tool_thought') {
         const thought = event.toolThought || event.resultMap?.taskSummary || ''
         if (thought) aiMsg.steps.push({ kind: 'thought', text: thought, time: Date.now() })
+        return
+      }
+      // tool_call：模型决定调用某工具（尚未执行）。参数里有 SQL / 检索词等关键信息，
+      // 前端先建一个 running 状态的步骤，等 tool_result 回填结果与耗时
+      if (type === 'tool_call') {
+        const call = event.toolCall || {}
+        aiMsg.steps.push({
+          kind: 'tool',
+          toolName: call.toolName || '未知工具',
+          toolParam: call.toolParam || null,
+          toolResult: null,
+          status: 'running',
+          time: Date.now(),
+          durationMs: null
+        })
+        return
+      }
+      // tool_result：工具执行完毕。优先回填到同名 running 步骤；
+      // 断线重连补发时可能错过 tool_call，则直接新建一个已完成步骤
+      if (type === 'tool_result') {
+        const tr = event.toolResult || {}
+        let step = [...aiMsg.steps].reverse().find(
+          (s) => s.kind === 'tool' && s.toolName === tr.toolName && s.status === 'running')
+        if (!step) {
+          step = { kind: 'tool', toolName: tr.toolName || '未知工具', toolParam: null, time: Date.now() }
+          aiMsg.steps.push(step)
+        }
+        step.toolResult = tr.toolResult ?? ''
+        step.status = 'done'
+        step.durationMs = step.time ? Date.now() - step.time : null
+        return
+      }
+      // task：任务规划模式（Planner）下发的执行步骤
+      if (type === 'task') {
+        if (event.task) {
+          aiMsg.steps.push({ kind: 'task', text: event.task, status: 'done', time: Date.now() })
+        }
         return
       }
       // agent_stream：后端逐 token 增量推送的正文（打字机效果的数据源）

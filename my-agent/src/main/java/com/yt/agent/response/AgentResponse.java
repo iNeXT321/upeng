@@ -30,6 +30,8 @@ public class AgentResponse {
     private String task;
     private String taskSummary;
     private String toolThought;
+    /** 工具调用意图（尚未执行）：模型本轮决定调用的工具与参数 */
+    private ToolCall toolCall;
     private ToolResult toolResult;
     private Map<String, Object> resultMap;
     private String result;
@@ -46,6 +48,15 @@ public class AgentResponse {
         private List<String> steps;
         private List<String> stepStatus;
         private List<String> notes;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ToolCall {
+        private String toolName;
+        private Map<String, Object> toolParam;
     }
 
     @Data
