@@ -26,6 +26,9 @@ services:
       # JWT 密钥：>=32 字节；不配置则每次重启生成临时密钥（所有用户掉线）
       AGENT_JWT_SECRET: ${AGENT_JWT_SECRET:-}
       AGENT_DEFAULT_PASSWORD: ${AGENT_DEFAULT_PASSWORD:-agent123}
+      # 跨域来源白名单（逗号分隔的 Origin pattern）。默认 * —— JWT 走请求头、无 Cookie，
+      # 而访问地址会随 localhost / 局域网 IP / Tailscale 100.x 变化，写死会 403 Invalid CORS request
+      AGENT_CORS_ALLOWED_ORIGINS: ${AGENT_CORS_ALLOWED_ORIGINS:-*}
       JAVA_OPTS: "-Xms512m -Xmx1200m -XX:+UseZGC"
       # 持久化：容器内 H2 文件（挂卷保留）
       AGENT_PERSISTENCE_URL: ${AGENT_PERSISTENCE_URL:-}

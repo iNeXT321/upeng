@@ -1,6 +1,7 @@
 package com.yt.agent.platform.auth;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,6 +17,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.http.HttpMethod;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -36,6 +38,20 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+
+    /**
+     * 跨域来源白名单（逗号分隔，支持 Spring 的 origin pattern 通配写法）。
+     *
+     * <p>默认 {@code *}：本平台鉴权走 Authorization 头里的 JWT、不使用 Cookie（见下方
+     * {@code allowCredentials=false}），因此放开来源不会造成凭据被第三方站点带发；
+     * 而部署环境的访问地址并不固定（localhost / 局域网 IP / Tailscale 100.x 地址 / 反向代理域名），
+     * 写死 localhost 会让"换台机器用 IP 访问"直接 403 Invalid CORS request。</p>
+     *
+     * <p>需要收紧时用环境变量覆盖，例如：
+     * {@code AGENT_CORS_ALLOWED_ORIGINS=http://localhost:3000,http://100.106.78.98:8080}</p>
+     */
+    @Value("${agent.cors.allowed-origin-patterns:*}")
+    private String allowedOriginPatterns;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -73,14 +89,26 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /** 开发期前端跑在 3000 端口；生产经 nginx 同源转发，此配置只为直连场景兜底 */
+    /**
+     * Spring Security 层的 CORS 配置。
+     *
+     * <p>注意：Security 的 CorsFilter 在 DispatcherServlet 之前执行，本处的配置优先级高于
+     * {@code com.yt.agent.config.CorsConfig}（WebMvcConfigurer）。两边不一致时，这里说了算——
+     * 白名单没写全就会在进 Controller 之前被拦下，返回 403 "Invalid CORS request"。
+     * 两处均由 {@code agent.cors.allowed-origin-patterns} 驱动，保持同一来源。</p>
+     */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of("http://localhost:*", "http://127.0.0.1:*"));
+        config.setAllowedOriginPatterns(Arrays.stream(allowedOriginPatterns.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList());
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setExposedHeaders(List.of("X-Trace-Id"));
+        // 无 Cookie 会话，不放开凭据；这样白名单里的 "*" 语义干净，不会与 allowCredentials 冲突
+        config.setAllowCredentials(false);
         config.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);

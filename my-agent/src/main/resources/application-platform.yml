@@ -4,6 +4,16 @@
 # =====================================================================
 agent:
 
+  # ---------- 跨域（CORS） ----------
+  # 逗号分隔的 Origin pattern 白名单，驱动 Security 过滤器与 MVC 两层 CORS 配置。
+  # 默认 "*"：JWT 走 Authorization 头、无 Cookie，放开来源不涉及凭据泄露；
+  # 而实际访问地址不固定（localhost / 局域网 IP / Tailscale 100.x / 反代域名），
+  # 写死 localhost 会导致换机访问时登录接口 403 "Invalid CORS request"。
+  # 需要收紧时用环境变量覆盖：
+  #   AGENT_CORS_ALLOWED_ORIGINS=http://localhost:3000,http://100.106.78.98:8080
+  cors:
+    allowed-origin-patterns: ${AGENT_CORS_ALLOWED_ORIGINS:*}
+
   # ---------- 模型网关 ----------
   # 角色化路由：不同环节用不同模型/温度，换厂商只改这里
   llm:
