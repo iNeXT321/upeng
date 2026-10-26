@@ -11,7 +11,7 @@ agent:
     # DeepSeek（OpenAI 兼容协议）：换厂商只需改 provider/model，代码零改动。
     # 切回智谱：provider 改 zhipuai、model 改 glm-4.5 即可。
     default-provider: openai
-    default-model: deepseek-flash
+    default-model: deepseek-chat
     max-attempts: 2
     retry-backoff-ms: 400
     call-timeout-ms: 120000
@@ -23,28 +23,28 @@ agent:
     routes:
       router:
         provider: openai
-        model: deepseek-flash
+        model: deepseek-chat
         temperature: 0.0
       planner:
         provider: openai
-        model: deepseek-flash
+        model: deepseek-chat
         temperature: 0.2
       executor:
         provider: openai
-        model: deepseek-flash
+        model: deepseek-chat
         temperature: 0.3
         max-tokens: 4096
       react:
         provider: openai
-        model: deepseek-flash
+        model: deepseek-chat
         temperature: 0.3
       summary:
         provider: openai
-        model: deepseek-flash
+        model: deepseek-chat
         temperature: 0.2
       rewriter:
         provider: openai
-        model: deepseek-flash
+        model: deepseek-chat
         temperature: 0.0
 
   # ---------- 运行时 ----------

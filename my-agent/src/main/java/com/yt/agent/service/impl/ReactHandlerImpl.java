@@ -37,7 +37,8 @@ public class ReactHandlerImpl implements AgentHandlerService {
         reActImpAgent.run(effectiveQuery);
 
         List<Message> transcript = context.transcriptSnapshot();
-        TaskSummaryResult result = summary.summaryTaskResult(
+        // 流式请求下逐 token 推送 agent_stream（打字机效果）；内部会自动降级为一次性生成
+        TaskSummaryResult result = summary.streamSummaryTaskResult(
                 transcript.isEmpty() ? reActImpAgent.getMemory().getMessages() : transcript,
                 request.getQuery());
 

@@ -114,7 +114,8 @@ public class PlanSolveHandlerImpl implements AgentHandlerService {
             log.info("step:{} handle planningResult: {}", stepIdx, planningResult);
 
             if ("finish".equals(planningResult)) {
-                TaskSummaryResult result = summary.summaryTaskResult(snapshotForSummary(agentContext, executor), request.getQuery());
+                // 流式请求下逐 token 推送 agent_stream（打字机效果）；内部会自动降级
+                TaskSummaryResult result = summary.streamSummaryTaskResult(snapshotForSummary(agentContext, executor), request.getQuery());
                 Map<String, Object> taskResult = new HashMap<>();
                 taskResult.put("taskSummary", result.getTaskSummary());
                 agentContext.getPrinter().send("result", taskResult);
@@ -132,7 +133,7 @@ public class PlanSolveHandlerImpl implements AgentHandlerService {
         }
 
         // 循环因预算/异常退出时也要给用户一个结论，而不是静默结束
-        TaskSummaryResult result = summary.summaryTaskResult(snapshotForSummary(agentContext, executor), request.getQuery());
+        TaskSummaryResult result = summary.streamSummaryTaskResult(snapshotForSummary(agentContext, executor), request.getQuery());
         Map<String, Object> taskResult = new HashMap<>();
         taskResult.put("taskSummary", result.getTaskSummary());
         agentContext.getPrinter().send("result", taskResult);

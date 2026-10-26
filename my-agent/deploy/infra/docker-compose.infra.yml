@@ -1,0 +1,96 @@
+# =====================================================================
+# 问数平台基础设施：MySQL(业务数仓) + Elasticsearch(关键词检索) + Milvus(向量检索)
+# 面向 8GB 内存 Mac（Apple Silicon）的本地生产级编排，资源上限已收紧。
+# 用法：
+#   docker compose -f deploy/infra/docker-compose.infra.yml up -d
+#   docker compose -f deploy/infra/docker-compose.infra.yml ps
+# 端口：
+#   MySQL        3306  (root / nl2sql_ro 只读账号见 init 脚本)
+#   Elasticsearch 9200  (本地开发关闭 security，生产必须开启)
+#   Milvus       19530 (gRPC) / 9091 (metrics/health)
+# =====================================================================
+name: bi-infra
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: bi-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-bi_root_2026}
+      MYSQL_DATABASE: bi_warehouse
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --innodb-buffer-pool-size=256M
+      - --max-connections=80
+      - --performance-schema=OFF
+      - --skip-name-resolve
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      # 初始化脚本：首次建库自动执行（按文件名字典序）
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-bi_root_2026}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.14.3
+    container_name: bi-es
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      xpack.monitoring.collection.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+      bootstrap.memory_lock: "false"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - "9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  # Milvus 单机模式：嵌入式 etcd + 本地存储，单容器省内存（官方 standalone_embed 部署形态）
+  milvus:
+    image: milvusdb/milvus:v2.4.15
+    container_name: bi-milvus
+    restart: unless-stopped
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_USE_EMBED: "true"
+      ETCD_DATA_DIR: /var/lib/milvus/etcd
+      ETCD_CONFIG_PATH: /milvus/configs/embedEtcd.yaml
+      COMMON_STORAGETYPE: "local"
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    volumes:
+      - milvus-data:/var/lib/milvus
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9091/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+volumes:
+  mysql-data:
+  es-data:
+  milvus-data:

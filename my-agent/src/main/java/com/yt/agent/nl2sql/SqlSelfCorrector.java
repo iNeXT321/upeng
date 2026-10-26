@@ -35,14 +35,21 @@ public class SqlSelfCorrector {
 
     private final int maxRetry;
     private final SqlSafetyGuard guard;
+    /** 目标库方言：mysql / postgresql（决定反引号等规则是否生效） */
+    private final String dialect;
 
     public SqlSelfCorrector(SqlSafetyGuard guard) {
-        this(guard, 3);
+        this(guard, 3, "postgresql");
     }
 
     public SqlSelfCorrector(SqlSafetyGuard guard, int maxRetry) {
+        this(guard, maxRetry, "postgresql");
+    }
+
+    public SqlSelfCorrector(SqlSafetyGuard guard, int maxRetry, String dialect) {
         this.guard = guard;
         this.maxRetry = maxRetry > 0 ? maxRetry : 3;
+        this.dialect = dialect == null ? "postgresql" : dialect.toLowerCase();
     }
 
     public int getMaxRetry() {
@@ -85,7 +92,9 @@ public class SqlSelfCorrector {
         }
 
         // 4) 反引号标识符（MySQL 风格）→ 双引号（PG 风格）
-        if (fixed.contains("`")) {
+        // 反引号转双引号仅适用于 PG（MySQL 默认把双引号当字符串字面量，转了必错）；
+        // MySQL 方言下反引号本来就是合法的标识符引用，保留不动
+        if (fixed.contains("`") && "postgresql".equals(dialect)) {
             fixed = fixed.replace('`', '"');
             fixes.add("反引号标识符已转换为双引号(PG风格)");
         }

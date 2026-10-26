@@ -39,7 +39,12 @@ public class SSEPrinter implements Printer {
             if (Objects.isNull(messageId)) {
                 messageId = StringUtil.getUUID();
             }
-            log.info("{} sse send {} {} ", request.getRequestId(), messageType, message);
+            // agent_stream 是逐 token 增量事件，info 级别会产生海量日志，降为 debug
+            if ("agent_stream".equals(messageType)) {
+                log.debug("{} sse send {} {}", request.getRequestId(), messageType, message);
+            } else {
+                log.info("{} sse send {} {} ", request.getRequestId(), messageType, message);
+            }
             boolean finish = "result".equals(messageType);
             Map<String, Object> resultMap = new HashMap<>();
             resultMap.put("agentType", agentType);

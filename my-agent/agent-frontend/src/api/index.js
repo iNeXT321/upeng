@@ -60,3 +60,14 @@ export const getKnowledge = () => http.get('/ai/knowledge')
 export const searchKnowledge = (q, topK = 4) =>
   http.get('/ai/knowledge/search', { params: { q, topK } })
 export const ingestKnowledge = (payload) => http.post('/ai/knowledge', payload)
+
+/* ---------------- 数据源浏览（MySQL / ES / Milvus 只读体检窗口） ---------------- */
+export const listMysqlTables = () => http.get('/ai/datasource/mysql/tables')
+export const getMysqlRows = (table, page = 1, size = 20) =>
+  http.get(`/ai/datasource/mysql/tables/${table}/rows`, { params: { page, size } })
+export const listEsIndices = () => http.get('/ai/datasource/es/indices')
+export const getEsDocs = (index, page = 1, size = 20, q = '') =>
+  http.get(`/ai/datasource/es/indices/${index}/docs`, { params: { page, size, q: q || undefined } })
+export const listMilvusCollections = () => http.get('/ai/datasource/milvus/collections')
+export const getMilvusRows = (name, limit = 50) =>
+  http.get(`/ai/datasource/milvus/collections/${name}/rows`, { params: { limit } })

@@ -106,7 +106,9 @@ export const useChatStore = defineStore('chat', {
       if (this.typeTimer) return
       this.typeTimer = setInterval(() => {
         if (aiMsg.pending) {
-          const take = Math.max(1, Math.ceil(aiMsg.pending.length / 25))
+          // 限速逐字搬运：基础 1 字/24ms（约 42 字/秒，接近真人打字观感）；
+          // 积压越多稍加速但封顶 6 字/tick，保证大段文本也能匀速敲出而非瞬间闪现
+          const take = Math.min(6, Math.max(1, Math.ceil(aiMsg.pending.length / 15)))
           aiMsg.content += aiMsg.pending.slice(0, take)
           aiMsg.pending = aiMsg.pending.slice(take)
         } else if (aiMsg._finished) {
@@ -125,6 +127,8 @@ export const useChatStore = defineStore('chat', {
 
     /** 缓冲区清空后真正的收尾（由打字机调用） */
     finalize(aiMsg) {
+      aiMsg.content += aiMsg.pending
+      aiMsg.pending = ''
       aiMsg.status = aiMsg.error ? 'error' : 'done'
       if (!aiMsg.content && !aiMsg.steps.length && !aiMsg.error) {
         aiMsg.content = '（本次没有返回内容）'
@@ -155,6 +159,7 @@ export const useChatStore = defineStore('chat', {
       const aiMsg = {
         id: uuid(), role: 'assistant', content: '', pending: '', steps: [],
         status: 'streaming', error: null, requestId: null, _finished: false,
+        _streamed: false, // 是否已收到 agent_stream 增量正文（用于 final result 去重）
         lastSeq: 0 // 已应用的最新事件序号：重连时传给服务端做增量续传，本地做去重
       }
       this.messages.push(userMsg, aiMsg)
@@ -233,22 +238,32 @@ export const useChatStore = defineStore('chat', {
         if (thought) aiMsg.steps.push({ kind: 'thought', text: thought, time: Date.now() })
         return
       }
-      // result：正文优先取 result，降级取 taskSummary（仅当 result 为空时）
+      // agent_stream：后端逐 token 增量推送的正文（打字机效果的数据源）
+      if (type === 'agent_stream') {
+        aiMsg._streamed = true
+      }
+      // result：正文优先取 result，降级取 taskSummary（仅当 result 为空时）。
+      // 注意：先进 pending 缓冲区，由打字机逐字搬运到 content——直接写 content
+      // 会导致文本整段出现（打字机拿不到积压，等于没有打字效果）。
       const result = event.result ?? ''
       const summary = event.resultMap?.taskSummary ?? ''
       const text = result || summary
-      if (text) aiMsg.content += text
+      // 已通过 agent_stream 增量推送过正文时，最终 result 事件只当结束信号，
+      // 不再重复拼接（否则整段答案会出现两遍）
+      const duplicated = type === 'result' && aiMsg._streamed
+      if (text && !duplicated) aiMsg.pending += text
+      // 流已到达末尾但打字机还在敲：标记完成，由打字机敲完缓冲后收尾
+      if (event.finish) aiMsg._finished = true
     },
 
+    /**
+     * 流读取结束：不立即收尾，标记 _finished 让打字机把缓冲区敲完再收尾
+     * （否则最后一段文本会整段跳出，破坏打字体验）。
+     */
     finish(aiMsg) {
-      aiMsg.status = 'done'
-      if (!aiMsg.content && !aiMsg.steps.length && !aiMsg.error) {
-        aiMsg.content = '（本次没有返回内容）'
-      }
-      this.streaming = false
-      this.currentRequestId = null
-      this.abortController = null
-      this.refreshSessions()
+      aiMsg._finished = true
+      // 保险：打字机已不在跑（异常场景）则直接落盘收尾
+      if (!this.typeTimer) this.finalize(aiMsg)
     }
   }
 })

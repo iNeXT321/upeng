@@ -26,7 +26,7 @@ description: 问数(Text2SQL/NL2SQL)数据分析标准作业流程(SOP)。当用
 基于召回的 Schema 编写 SQL，遵守以下硬性规范：
 
 1. **只写单条 SELECT**（可用 WITH CTE），禁止任何 DDL/DML、多语句、注释内嵌指令。
-2. **字段名严格对齐 Schema**：注意大小写、schema 前缀（如 public.orders）。
+2. **字段名严格对齐 Schema**：注意大小写；表名直接用 Schema 返回的表名（如 fact_orders），无需加库前缀。
 3. **枚举值映射**：中文业务词必须映射为字段实际存储值（如"华东"→ region='east'，"已支付"→ order_status IN (1,2,3)，参照 Schema 中的枚举说明）。
 4. **必须带过滤条件**：大表查询必须有时间范围过滤（使用标记为[时间分区字段]的列），避免全表扫描。
 5. **聚合正确性**：GROUP BY 必须包含所有非聚合列；比率计算分母用 NULLIF(x, 0) 防除零。
@@ -41,7 +41,7 @@ description: 问数(Text2SQL/NL2SQL)数据分析标准作业流程(SOP)。当用
 - **安全校验未通过**：阅读拦截原因，修正 SQL（不要试图绕过校验），重新执行。
 - **执行失败**：错误信息中带有「修正建议」，逐条对照修正后重试。常见修正：
   - 列名不存在 → 核对 retrieve_schema 返回的准确字段名
-  - 语法错误 → 检查方言（目标是 PostgreSQL：日期用 DATE '2026-01-01'，字符串用单引号，除法注意整数相除需 ::numeric 转换）
+  - 语法错误 → 检查方言（目标是 MySQL 8.0：日期用 CURDATE()/DATE_FORMAT()/DATE_SUB()，字符串拼接用 CONCAT()，严禁 :: 强转、ILIKE、TO_CHAR、DATE '...' 等 PostgreSQL 语法）
   - 类型不匹配 → 显式 CAST
   - 列名歧义 → 加表名限定
 - **重试上限 3 次**：连续失败 3 次后停止重试，向用户说明失败原因（数据/权限/语义层面），不要原样重复提交相同 SQL。

@@ -21,6 +21,9 @@
         <el-menu-item index="/monitor">
           <el-icon><Odometer /></el-icon><span>运行监控</span>
         </el-menu-item>
+        <el-menu-item index="/databrowser">
+          <el-icon><Coin /></el-icon><span>数据浏览</span>
+        </el-menu-item>
       </el-menu>
       <div class="app-footer-status">
         <span class="status-dot" :class="platform.backendUp ? 'up' : 'down'"></span>
@@ -46,6 +49,7 @@
 <script setup>
 import { onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { ChatDotRound, Clock, Collection, Odometer, Coin } from '@element-plus/icons-vue'
 import { usePlatformStore } from '@/stores/platform'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'

@@ -5,6 +5,8 @@
 # ---- Stage 1: 构建（依赖层缓存：先拷 pom 下载依赖，再拷源码，源码改动不重拉依赖） ----
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /app
+# Maven 走阿里云镜像（构建提速；spring 里程碑仓库走官方）
+RUN mkdir -p /root/.m2 && printf '<?xml version="1.0" encoding="UTF-8"?>\n<settings><mirrors><mirror><id>aliyunmaven</id><mirrorOf>*,!spring-milestones,!spring-snapshots,!central-portal-snapshots</mirrorOf><url>https://maven.aliyun.com/repository/public</url></mirror></mirrors></settings>' > /root/.m2/settings.xml
 COPY pom.xml .
 RUN mvn -q dependency:go-offline -DskipTests || true
 COPY src ./src
@@ -14,8 +16,10 @@ RUN mvn -q package -DskipTests
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
-# 安全基线：不用 root 跑应用
-RUN addgroup -S app && adduser -S app -G app
+# 安全基线：不用 root 跑应用；预建日志/数据目录并授权
+RUN addgroup -S app && adduser -S app -G app \
+    && mkdir -p /app/logs /app/data \
+    && chown -R app:app /app/logs /app/data
 USER app
 
 COPY --from=build /app/target/*.jar app.jar

@@ -224,6 +224,20 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- ===== 问数数据源与 schema 混合召回 ===== -->
+        <!-- MySQL 数仓驱动（问数只读数据源） -->
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- Milvus 向量检索客户端（schema 语义召回） -->
+        <dependency>
+            <groupId>io.milvus</groupId>
+            <artifactId>milvus-sdk-java</artifactId>
+            <version>2.5.4</version>
+        </dependency>
+
     </dependencies>
 
     <build>

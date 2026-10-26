@@ -74,7 +74,8 @@ public class Nl2SqlTool {
                 sb.append(ss.getSchema().toPromptText(false)).append("\n");
                 sb.append("匹配依据: ").append(ss.getMatchedColumns().keySet()).append("\n\n");
             }
-            sb.append("【SQL编写要求】1) 只能写单条SELECT语句；2) 必须带WHERE时间/业务过滤条件；")
+            sb.append("【SQL编写要求】0) 目标库为 MySQL 8.0，请使用 MySQL 方言（日期函数用 CURDATE/DATE_FORMAT/DATE_SUB，禁止 :: 强转、ILIKE、TO_CHAR 等 PostgreSQL 语法）；")
+                    .append("1) 只能写单条SELECT语句；2) 必须带WHERE时间/业务过滤条件；")
                     .append("3) 聚合查询需正确使用GROUP BY；4) 涉及比率用NULLIF防除零；5) 结果默认最多返回1000行。");
             span.result("召回表: " + linked.stream().map(SchemaLinker.ScoredSchema::getTableName)
                     .collect(Collectors.joining(",")), true);

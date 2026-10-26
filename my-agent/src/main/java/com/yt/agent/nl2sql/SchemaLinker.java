@@ -137,7 +137,7 @@ public class SchemaLinker {
         return top;
     }
 
-    private ScoredSchema scoreSchema(TableSchema schema, String q, List<String> tokens) {
+    protected ScoredSchema scoreSchema(TableSchema schema, String q, List<String> tokens) {
         double score = 0.0;
         Map<String, Double> matchedColumns = new LinkedHashMap<>();
 
@@ -212,7 +212,7 @@ public class SchemaLinker {
     }
 
     /** 字段裁剪：保留命中字段 + 主键 + 时间分区字段 */
-    private TableSchema pruneColumns(TableSchema origin, Map<String, Double> matched) {
+    protected TableSchema pruneColumns(TableSchema origin, Map<String, Double> matched) {
         if (origin.getColumns() == null) return origin;
         Set<String> keep = matched.entrySet().stream()
                 .sorted(Map.Entry.<String, Double>comparingByValue().reversed())

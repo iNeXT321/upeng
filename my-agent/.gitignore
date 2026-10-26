@@ -44,6 +44,18 @@ knowledge/
 *.mv.db
 *.trace.db
 mcp-servers.local.json
+# 环境变量（API Key 等，绝不入库）
+.env
+deploy/infra/mysql/init/02_data.sql
+
+# 临时测试残留（8 位随机名、内容为 blat 的垃圾文件）
+/7q4oniu4
+/i5k82fwy
+/ls50xxst
+/mefctdq2
+/p4yc_7rh
+/t5c93y01
+/vgihiv9o
 
 # Agent 会话记忆（不公开）
 .workbuddy/

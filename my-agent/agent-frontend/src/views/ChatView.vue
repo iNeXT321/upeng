@@ -49,8 +49,9 @@
               </div>
             </el-collapse-item>
           </el-collapse>
-          <!-- 正文（Markdown 渲染） -->
+          <!-- 正文（Markdown 渲染）+ 流式打字光标 -->
           <div v-if="msg.content" class="msg-content markdown" v-html="renderMd(msg.content)" />
+          <span v-if="msg.status === 'streaming' && msg.content" class="type-cursor" />
           <div v-if="msg.status === 'streaming' && !msg.content && !msg.error" class="typing">
             <span class="dot" /><span class="dot" /><span class="dot" />
           </div>

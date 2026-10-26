@@ -1,1 +1,110 @@
-[{"tableName": "public.orders", "tableComment": "订单主表：一笔交易一行，记录订单金额、状态、渠道与归属区域", "domain": "交易", "synonyms": ["订单", "交易", "成交", "销售订单"], "rowCount": 12500000, "primaryKeys": ["order_id"], "columns": [{"columnName": "order_id", "dataType": "bigint", "comment": "订单ID，主键", "synonyms": ["订单号"]}, {"columnName": "order_date", "dataType": "date", "comment": "下单日期，分区字段", "synonyms": ["日期", "时间", "下单时间"], "timePartition": true}, {"columnName": "user_id", "dataType": "bigint", "comment": "下单用户ID，关联dim_users.user_id", "synonyms": ["用户", "客户"]}, {"columnName": "channel", "dataType": "varchar(32)", "comment": "销售渠道", "synonyms": ["渠道"], "enumValues": ["app=手机APP", "web=官网", "mini=微信小程序", "offline=线下门店", "third=第三方平台"]}, {"columnName": "region", "dataType": "varchar(32)", "comment": "销售大区", "synonyms": ["区域", "大区", "地区"], "enumValues": ["east=华东", "south=华南", "north=华北", "central=华中", "west=西部", "northeast=东北"]}, {"columnName": "gmv", "dataType": "numeric(18,2)", "comment": "订单金额(GMV)，单位元", "synonyms": ["销售额", "营收", "金额", "成交额", "GMV"]}, {"columnName": "order_status", "dataType": "int", "comment": "订单状态", "synonyms": ["状态"], "enumValues": ["0=待支付", "1=已支付", "2=已发货", "3=已完成", "4=已取消", "5=已退款"]}, {"columnName": "discount_amount", "dataType": "numeric(18,2)", "comment": "优惠金额，单位元", "synonyms": ["优惠", "折扣金额"]}, {"columnName": "pay_time", "dataType": "timestamp", "comment": "支付时间，未支付为NULL"}, {"columnName": "buyer_phone", "dataType": "varchar(32)", "comment": "买家手机号", "sensitive": true}]}, {"tableName": "public.order_items", "tableComment": "订单明细表：一个订单下每个商品一行", "domain": "交易", "synonyms": ["订单明细", "商品明细", "购买明细"], "rowCount": 45000000, "primaryKeys": ["item_id"], "columns": [{"columnName": "item_id", "dataType": "bigint", "comment": "明细ID，主键"}, {"columnName": "order_id", "dataType": "bigint", "comment": "订单ID，关联orders.order_id", "synonyms": ["订单号"]}, {"columnName": "sku_id", "dataType": "bigint", "comment": "商品SKU ID，关联dim_products.sku_id", "synonyms": ["商品", "SKU"]}, {"columnName": "quantity", "dataType": "int", "comment": "购买数量", "synonyms": ["数量", "件数", "销量"]}, {"columnName": "unit_price", "dataType": "numeric(18,2)", "comment": "成交单价，单位元", "synonyms": ["单价", "价格"]}, {"columnName": "item_amount", "dataType": "numeric(18,2)", "comment": "明细金额=quantity*unit_price-分摊优惠", "synonyms": ["明细金额", "小计"]}]}, {"tableName": "public.dim_users", "tableComment": "用户维表：注册用户画像属性", "domain": "用户", "synonyms": ["用户", "会员", "客户"], "rowCount": 3200000, "primaryKeys": ["user_id"], "columns": [{"columnName": "user_id", "dataType": "bigint", "comment": "用户ID，主键"}, {"columnName": "register_date", "dataType": "date", "comment": "注册日期", "synonyms": ["注册时间"], "timePartition": true}, {"columnName": "gender", "dataType": "varchar(8)", "comment": "性别", "enumValues": ["M=男", "F=女", "U=未知"]}, {"columnName": "age_group", "dataType": "varchar(16)", "comment": "年龄段", "synonyms": ["年龄"], "enumValues": ["<18", "18-24", "25-30", "31-40", "41-50", ">50"]}, {"columnName": "city_level", "dataType": "varchar(8)", "comment": "城市等级", "synonyms": ["城市级别"], "enumValues": ["T1=一线", "T2=二线", "T3=三线", "T4=四线及以下"]}, {"columnName": "member_level", "dataType": "varchar(16)", "comment": "会员等级", "synonyms": ["会员", "VIP"], "enumValues": ["normal=普通", "silver=银卡", "gold=金卡", "platinum=白金"]}, {"columnName": "id_card_no", "dataType": "varchar(64)", "comment": "身份证号", "sensitive": true}]}, {"tableName": "public.dim_products", "tableComment": "商品维表：SKU级商品属性", "domain": "商品", "synonyms": ["商品", "产品", "SKU"], "rowCount": 150000, "primaryKeys": ["sku_id"], "columns": [{"columnName": "sku_id", "dataType": "bigint", "comment": "SKU ID，主键"}, {"columnName": "product_name", "dataType": "varchar(256)", "comment": "商品名称", "synonyms": ["品名", "商品名"]}, {"columnName": "category_l1", "dataType": "varchar(64)", "comment": "一级类目", "synonyms": ["类目", "品类", "分类"]}, {"columnName": "category_l2", "dataType": "varchar(64)", "comment": "二级类目"}, {"columnName": "brand", "dataType": "varchar(64)", "comment": "品牌", "synonyms": ["牌子"]}, {"columnName": "list_price", "dataType": "numeric(18,2)", "comment": "标价，单位元", "synonyms": ["定价", "标价"]}, {"columnName": "is_self_operated", "dataType": "int", "comment": "是否自营", "enumValues": ["1=自营", "0=第三方商家"]}]}, {"tableName": "public.user_behavior", "tableComment": "用户行为表：曝光/点击/加购/收藏事件流，流量与转化分析用", "domain": "流量", "synonyms": ["行为", "埋点", "流量", "浏览"], "rowCount": 890000000, "primaryKeys": ["event_id"], "columns": [{"columnName": "event_id", "dataType": "bigint", "comment": "事件ID，主键"}, {"columnName": "event_date", "dataType": "date", "comment": "事件日期，分区字段", "timePartition": true}, {"columnName": "user_id", "dataType": "bigint", "comment": "用户ID"}, {"columnName": "event_type", "dataType": "varchar(16)", "comment": "事件类型", "synonyms": ["行为类型", "事件"], "enumValues": ["view=浏览", "click=点击", "cart=加购物车", "fav=收藏", "share=分享"]}, {"columnName": "sku_id", "dataType": "bigint", "comment": "关联商品SKU"}, {"columnName": "stay_seconds", "dataType": "int", "comment": "页面停留秒数", "synonyms": ["停留时长"]}]}]
+[
+  {
+    "tableName": "fact_orders",
+    "tableComment": "订单事实表：一笔交易一行，记录订单金额、状态、渠道、活动与归属大区，销售分析核心宽表",
+    "domain": "交易",
+    "synonyms": ["订单", "交易", "成交", "销售订单", "销售额", "GMV", "营收"],
+    "rowCount": 62545,
+    "primaryKeys": ["order_id"],
+    "columns": [
+      {"columnName": "order_id", "dataType": "bigint", "comment": "订单ID，主键", "synonyms": ["订单号"]},
+      {"columnName": "order_date", "dataType": "date", "comment": "下单日期，BI 统计的时间口径字段", "synonyms": ["日期", "时间", "下单时间"], "timePartition": true},
+      {"columnName": "user_id", "dataType": "bigint", "comment": "下单用户ID，关联 dim_users.user_id", "synonyms": ["用户", "客户"]},
+      {"columnName": "channel", "dataType": "varchar(16)", "comment": "下单渠道", "synonyms": ["渠道", "来源"], "enumValues": ["app=手机APP", "web=官网", "mini=微信小程序", "offline=线下门店", "third=第三方平台"]},
+      {"columnName": "region", "dataType": "varchar(16)", "comment": "收货大区（下单时快照）", "synonyms": ["区域", "大区", "地区"], "enumValues": ["east=华东", "south=华南", "north=华北", "central=华中", "west=西部", "northeast=东北"]},
+      {"columnName": "campaign_id", "dataType": "int", "comment": "参与的营销活动ID，关联 dim_campaigns.campaign_id，非活动单为NULL", "synonyms": ["活动", "大促", "促销"]},
+      {"columnName": "gmv", "dataType": "decimal(18,2)", "comment": "订单应付金额(GMV)，单位元", "synonyms": ["销售额", "营收", "金额", "成交额", "GMV"]},
+      {"columnName": "discount_amount", "dataType": "decimal(18,2)", "comment": "优惠总额（活动+券），单位元", "synonyms": ["优惠", "折扣金额"]},
+      {"columnName": "order_status", "dataType": "tinyint", "comment": "订单状态", "synonyms": ["状态"], "enumValues": ["0=待支付", "1=已支付", "2=已发货", "3=已完成", "4=已取消", "5=已退款"]},
+      {"columnName": "pay_time", "dataType": "datetime", "comment": "支付时间，未支付/取消为NULL", "synonyms": ["支付时间", "付款时间"]}
+    ]
+  },
+  {
+    "tableName": "fact_order_items",
+    "tableComment": "订单明细事实表：一个订单下每个商品一行，用于商品维度与销量分析",
+    "domain": "交易",
+    "synonyms": ["订单明细", "商品明细", "购买明细", "销量"],
+    "rowCount": 115684,
+    "primaryKeys": ["item_id"],
+    "columns": [
+      {"columnName": "item_id", "dataType": "bigint", "comment": "明细ID，主键"},
+      {"columnName": "order_id", "dataType": "bigint", "comment": "订单ID，关联 fact_orders.order_id", "synonyms": ["订单号"]},
+      {"columnName": "sku_id", "dataType": "bigint", "comment": "商品SKU ID，关联 dim_products.sku_id", "synonyms": ["商品", "SKU"]},
+      {"columnName": "quantity", "dataType": "int", "comment": "购买数量", "synonyms": ["数量", "件数", "销量"]},
+      {"columnName": "unit_price", "dataType": "decimal(10,2)", "comment": "成交单价（折后），单位元", "synonyms": ["单价"]},
+      {"columnName": "sales_amount", "dataType": "decimal(18,2)", "comment": "销售小计 = quantity * unit_price，单位元", "synonyms": ["销售额", "小计", "商品销售金额"]}
+    ]
+  },
+  {
+    "tableName": "fact_refunds",
+    "tableComment": "退款事实表：售后逆向数据，用于退款率、退款原因与售后质量分析",
+    "domain": "售后",
+    "synonyms": ["退款", "退货", "售后", "退款率"],
+    "rowCount": 3119,
+    "primaryKeys": ["refund_id"],
+    "columns": [
+      {"columnName": "refund_id", "dataType": "bigint", "comment": "退款单ID，主键"},
+      {"columnName": "order_id", "dataType": "bigint", "comment": "关联 fact_orders.order_id", "synonyms": ["订单号"]},
+      {"columnName": "item_id", "dataType": "bigint", "comment": "关联 fact_order_items.item_id，整单退款为NULL"},
+      {"columnName": "refund_date", "dataType": "date", "comment": "退款申请日期", "synonyms": ["退款时间", "售后日期"], "timePartition": true},
+      {"columnName": "refund_amount", "dataType": "decimal(18,2)", "comment": "退款金额，单位元", "synonyms": ["退款金额"]},
+      {"columnName": "refund_reason", "dataType": "varchar(64)", "comment": "退款原因", "synonyms": ["原因"], "enumValues": ["质量问题", "七天无理由", "物流损坏", "少发漏发", "不想要了"]},
+      {"columnName": "refund_status", "dataType": "tinyint", "comment": "退款状态", "synonyms": ["退款状态"], "enumValues": ["0=待审核", "1=已退款", "2=已拒绝"]}
+    ]
+  },
+  {
+    "tableName": "dim_users",
+    "tableComment": "用户维度表：注册用户主数据，含性别、年龄段、省市、大区、会员等级画像",
+    "domain": "用户",
+    "synonyms": ["用户", "会员", "客户"],
+    "rowCount": 5000,
+    "primaryKeys": ["user_id"],
+    "columns": [
+      {"columnName": "user_id", "dataType": "bigint", "comment": "用户ID，主键", "synonyms": ["用户ID"]},
+      {"columnName": "user_name", "dataType": "varchar(64)", "comment": "用户昵称（已脱敏）", "synonyms": ["昵称", "姓名"]},
+      {"columnName": "gender", "dataType": "tinyint", "comment": "性别", "synonyms": ["性别"], "enumValues": ["0=未知", "1=男", "2=女"]},
+      {"columnName": "age_band", "dataType": "varchar(16)", "comment": "年龄段", "synonyms": ["年龄", "年龄段"], "enumValues": ["18-24", "25-30", "31-40", "41-50", "50+"]},
+      {"columnName": "province", "dataType": "varchar(32)", "comment": "省份", "synonyms": ["省"]},
+      {"columnName": "city", "dataType": "varchar(32)", "comment": "城市", "synonyms": ["城市"]},
+      {"columnName": "region", "dataType": "varchar(32)", "comment": "销售大区", "synonyms": ["区域", "大区"], "enumValues": ["east=华东", "south=华南", "north=华北", "central=华中", "west=西部", "northeast=东北"]},
+      {"columnName": "vip_level", "dataType": "tinyint", "comment": "会员等级", "synonyms": ["会员等级", "VIP"], "enumValues": ["0=普通", "1=银卡", "2=金卡", "3=铂金", "4=钻石"]},
+      {"columnName": "register_date", "dataType": "date", "comment": "注册日期", "synonyms": ["注册时间", "注册"], "timePartition": true},
+      {"columnName": "user_phone", "dataType": "varchar(16)", "comment": "手机号（脱敏：保留前3后4）", "sensitive": true}
+    ]
+  },
+  {
+    "tableName": "dim_products",
+    "tableComment": "商品维度表：SKU 主数据，含一二级类目、品牌、价格带与在售状态",
+    "domain": "商品",
+    "synonyms": ["商品", "SKU", "货品", "产品"],
+    "rowCount": 800,
+    "primaryKeys": ["sku_id"],
+    "columns": [
+      {"columnName": "sku_id", "dataType": "bigint", "comment": "商品SKU ID，主键", "synonyms": ["商品ID", "SKU ID"]},
+      {"columnName": "sku_name", "dataType": "varchar(128)", "comment": "商品名称", "synonyms": ["商品名"]},
+      {"columnName": "category_l1", "dataType": "varchar(32)", "comment": "一级类目", "synonyms": ["类目", "品类", "一级类目"], "enumValues": ["数码家电", "服饰鞋包", "美妆个护", "食品饮料", "家居日用", "母婴玩具", "运动户外", "图书文娱"]},
+      {"columnName": "category_l2", "dataType": "varchar(32)", "comment": "二级类目，如 手机/连衣裙/精华液", "synonyms": ["子类目", "二级类目"]},
+      {"columnName": "brand", "dataType": "varchar(64)", "comment": "品牌", "synonyms": ["品牌"]},
+      {"columnName": "list_price", "dataType": "decimal(10,2)", "comment": "吊牌价，单位元", "synonyms": ["原价", "吊牌价", "定价"]},
+      {"columnName": "cost_price", "dataType": "decimal(10,2)", "comment": "进货成本价，单位元", "synonyms": ["成本", "成本价"]},
+      {"columnName": "status", "dataType": "tinyint", "comment": "商品状态", "synonyms": ["商品状态"], "enumValues": ["1=在售", "0=下架"]},
+      {"columnName": "launch_date", "dataType": "date", "comment": "上架日期", "synonyms": ["上架时间"], "timePartition": true}
+    ]
+  },
+  {
+    "tableName": "dim_campaigns",
+    "tableComment": "营销活动维度表：平台大促、品类日与会员日活动日历",
+    "domain": "营销",
+    "synonyms": ["活动", "大促", "营销活动", "促销活动"],
+    "rowCount": 8,
+    "primaryKeys": ["campaign_id"],
+    "columns": [
+      {"columnName": "campaign_id", "dataType": "int", "comment": "营销活动ID，主键", "synonyms": ["活动ID"]},
+      {"columnName": "campaign_name", "dataType": "varchar(64)", "comment": "活动名称，如 618大促/双11狂欢节", "synonyms": ["活动名称"]},
+      {"columnName": "campaign_type", "dataType": "varchar(32)", "comment": "活动类型", "synonyms": ["活动类型"], "enumValues": ["platform_promo=平台大促", "category_promo=品类日", "member_day=会员日"]},
+      {"columnName": "start_date", "dataType": "date", "comment": "活动开始日期", "synonyms": ["开始时间"], "timePartition": true},
+      {"columnName": "end_date", "dataType": "date", "comment": "活动结束日期", "synonyms": ["结束时间"]},
+      {"columnName": "discount_desc", "dataType": "varchar(128)", "comment": "优惠说明，如 满300减50", "synonyms": ["优惠说明", "满减规则"]}
+    ]
+  }
+]

@@ -32,6 +32,12 @@ const routes = [
     component: () => import('@/views/MonitorView.vue'),
     meta: { title: '运行监控', icon: 'Odometer' }
   },
+  {
+    path: '/databrowser',
+    name: 'databrowser',
+    component: () => import('@/views/DataBrowserView.vue'),
+    meta: { title: '数据浏览', icon: 'Coin' }
+  },
   { path: '/:pathMatch(.*)*', redirect: '/chat' }
 ]
 
