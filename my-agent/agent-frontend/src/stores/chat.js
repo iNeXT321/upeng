@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { streamChat } from '@/api/sse'
 import { stopAgent, listSessions, getSessionDetail, clearSession } from '@/api'
+import { splitHtmlSegments } from '@/utils/htmlPreview'
 
 function uuid() {
   return crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2)
@@ -43,13 +44,18 @@ export const useChatStore = defineStore('chat', {
       this.sessionId = sessionId
       try {
         const detail = await getSessionDetail(sessionId)
-        this.messages = (detail.messages || []).map((t) => ({
-          id: uuid(),
-          role: t.role === 'user' ? 'user' : 'assistant',
-          content: t.content || '',
-          steps: [],
-          status: 'done'
-        })).filter((m) => m.content)
+        this.messages = (detail.messages || []).map((t) => {
+          const content = t.content || ''
+          return {
+            id: uuid(),
+            role: t.role === 'user' ? 'user' : 'assistant',
+            content,
+            // 回放时同样切段：历史里含网页的回答也能预览，而不是一坨源码
+            segments: t.role === 'user' ? [] : splitHtmlSegments(content),
+            steps: [],
+            status: 'done'
+          }
+        }).filter((m) => m.content)
       } catch (e) {
         this.messages = []
         throw e
@@ -92,6 +98,8 @@ export const useChatStore = defineStore('chat', {
         last.content += last.pending || ''
         last.pending = ''
         last.status = last.error ? 'error' : 'done'
+        // 中断的内容若已构成完整网页（含闭合标签）也允许预览，否则自然降级为 markdown
+        last.segments = last.error ? [] : splitHtmlSegments(last.content)
         if (!last.content && !last.error) last.content = '（已停止）'
         this.streaming = false
       }
@@ -134,6 +142,8 @@ export const useChatStore = defineStore('chat', {
       aiMsg.steps.forEach((s) => {
         if (s.kind === 'tool' && s.status === 'running') s.status = 'done'
       })
+      // 流式结束后再切段：流式期间 iframe 会随每个 token 重建，网页预览只在完成后挂载
+      aiMsg.segments = aiMsg.error ? [] : splitHtmlSegments(aiMsg.content)
       if (!aiMsg.content && !aiMsg.steps.length && !aiMsg.error) {
         aiMsg.content = '（本次没有返回内容）'
       }
@@ -161,7 +171,7 @@ export const useChatStore = defineStore('chat', {
         attachments: files.map(f => f.name), steps: [], status: 'done'
       }
       const aiMsg = {
-        id: uuid(), role: 'assistant', content: '', pending: '', steps: [],
+        id: uuid(), role: 'assistant', content: '', pending: '', steps: [], segments: [],
         status: 'streaming', error: null, requestId: null, _finished: false,
         _streamed: false, // 是否已收到 agent_stream 增量正文（用于 final result 去重）
         lastSeq: 0 // 已应用的最新事件序号：重连时传给服务端做增量续传，本地做去重

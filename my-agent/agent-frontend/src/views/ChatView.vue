@@ -31,7 +31,7 @@
           <el-icon v-if="msg.role === 'user'" :size="20"><User /></el-icon>
           <el-icon v-else :size="20" color="#409eff"><MagicStick /></el-icon>
         </div>
-        <div class="bubble" :class="msg.role">
+        <div class="bubble" :class="[msg.role, { 'bubble-wide': hasHtmlSegment(msg) }]">
           <!-- 用户消息：显示附件标签 -->
           <div v-if="msg.attachments?.length" class="msg-attachments">
             <el-tag v-for="name in msg.attachments" :key="name" size="small" type="info">
@@ -80,8 +80,16 @@
               </template>
             </el-collapse-item>
           </el-collapse>
-          <!-- 正文（Markdown 渲染）+ 流式打字光标 -->
-          <div v-if="msg.content" class="msg-content markdown" v-html="renderMd(msg.content)" />
+          <!-- 正文：说明文字走 markdown，网页部分用沙箱卡片预览（流式期间整体走 markdown，避免 iframe 反复重建） -->
+          <div v-if="msg.content" class="msg-content">
+            <template v-if="msg.segments && msg.segments.length">
+              <template v-for="(seg, si) in msg.segments" :key="si">
+                <HtmlPreview v-if="seg.type === 'html'" :html="seg.content" :title="seg.title" />
+                <div v-else class="markdown" v-html="renderMd(seg.content)" />
+              </template>
+            </template>
+            <div v-else class="markdown" v-html="renderMd(msg.content)" />
+          </div>
           <span v-if="msg.status === 'streaming' && msg.content" class="type-cursor" />
           <div v-if="msg.status === 'streaming' && !msg.content && !msg.error" class="typing">
             <span class="dot" /><span class="dot" /><span class="dot" />
@@ -129,6 +137,7 @@ import { RefreshLeft, Paperclip, Promotion, VideoPause } from '@element-plus/ico
 import { useChatStore } from '@/stores/chat'
 import { AGENT_TYPES } from '@/api/sse'
 import { renderMd } from '@/utils/markdown'
+import HtmlPreview from '@/components/HtmlPreview.vue'
 
 const chat = useChatStore()
 const agentTypes = AGENT_TYPES
@@ -149,6 +158,12 @@ function toolStatusText(msg, s, i) {
   if (stepRunning(msg, s, i)) return '执行中…'
   if (!s.toolResult) return '完成（无结果返回）'
   return s.durationMs != null ? `完成 · ${fmtDur(s.durationMs)}` : '完成'
+}
+
+/** 该条消息是否含网页段（含则放宽气泡宽度，避免预览被挤成窄条） */
+function hasHtmlSegment(msg) {
+  return msg.role === 'assistant' && Array.isArray(msg.segments)
+    && msg.segments.some((s) => s.type === 'html')
 }
 
 function fmtDur(ms) {
@@ -245,6 +260,8 @@ async function onFilePicked(uploadFile) {
   background: #fff; border: 1px solid #e4e7ed; font-size: 14px; line-height: 1.7;
 }
 .msg-row.user .bubble { background: #d9ecff; border-color: #c6e2ff; }
+/* 含网页预览的消息放宽气泡：预览卡片需要横向空间，78% 会把它压成窄条 */
+.bubble.bubble-wide { max-width: 100%; width: 100%; }
 .msg-attachments { margin-bottom: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
 .msg-steps { margin-bottom: 8px; border: none; }
 .msg-steps :deep(.el-collapse-item__header) {
