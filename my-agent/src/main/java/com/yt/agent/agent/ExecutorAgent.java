@@ -228,7 +228,9 @@ public class ExecutorAgent extends ReActAgent {
 
         List<String> results = new ArrayList<>();
         for (ToolResponseMessage.ToolResponse toolResponse : toolResponseMessage.getResponses()) {
-            String result = toolResponse.responseData();
+            // 解包二次 JSON 编码：部分 Spring AI 版本的 ToolCallResultConverter 会把 String
+            // 返回值整体 JSON 编码（首尾加引号、换行变 \n 字面量），此处统一还原
+            String result = unwrapToolResponse(toolResponse.responseData());
             String toolName = toolResponse.name();
 
             if (!Arrays.asList("report_tool").contains(toolName)) {
@@ -291,6 +293,30 @@ public class ExecutorAgent extends ReActAgent {
             fallback.put("_raw", arguments);
             return fallback;
         }
+    }
+
+    /**
+     * 解包工具结果的二次 JSON 编码。
+     * Spring AI 的 DefaultToolCallResultConverter 对 String 返回值做 JsonParser.toJson，
+     * 产物形如 "\"多行文本\""（首尾引号 + 换行变 \n 字面量）。此处只做一次解码：
+     * 仅当整体是一个 JSON 字符串字面量时还原，其他形态原样返回，绝不影响结构化结果。
+     */
+    private String unwrapToolResponse(String response) {
+        if (response == null) {
+            return null;
+        }
+        String s = response.trim();
+        if (s.length() >= 2 && s.charAt(0) == '"' && s.charAt(s.length() - 1) == '"') {
+            try {
+                Object decoded = JSON.parse(s);
+                if (decoded instanceof String decodedStr) {
+                    return decodedStr;
+                }
+            } catch (Exception ignore) {
+                // 不是合法 JSON 字符串字面量，按原文返回
+            }
+        }
+        return response;
     }
 
 }

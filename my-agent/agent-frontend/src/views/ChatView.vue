@@ -65,7 +65,7 @@
                     </details>
                     <details v-if="s.toolResult" class="tool-detail">
                       <summary>执行结果 · {{ s.toolResult.length }} 字符 · {{ preview(s.toolResult) }}</summary>
-                      <pre class="tool-code">{{ s.toolResult }}</pre>
+                      <div class="tool-md markdown" v-html="renderMd(s.toolResult)" />
                     </details>
                   </div>
                 </div>
@@ -279,6 +279,13 @@ async function onFilePicked(uploadFile) {
   font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 12px;
   line-height: 1.6; white-space: pre-wrap; word-break: break-all; color: #303133;
 }
+/* 执行结果 markdown 容器：限制高度可滚动，字号贴近步骤文本 */
+.tool-md {
+  margin: 4px 0 0; padding: 8px 10px; max-height: 320px; overflow: auto;
+  background: #f6f8fa; border: 1px solid #e4e7ed; border-radius: 6px;
+  font-size: 12px; line-height: 1.6; word-break: break-all;
+}
+.tool-md :deep(table) { font-size: 12px; white-space: normal; }
 .typing { display: inline-flex; gap: 4px; padding: 4px 0; }
 .type-cursor {
   display: inline-block; width: 2px; height: 1em;
